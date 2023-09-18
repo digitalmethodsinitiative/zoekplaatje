@@ -11,13 +11,15 @@ download them as a .CSV spreadsheet. It is intended to facilitate systematic ana
 
 Currently, it supports the following search engines:
 * [Google](https://www.google.com)
-* [Bing](https://www.baidu.com)
+* [Bing](https://www.bing.com)
+* [Baidu](https://baidu.com)
+* [DuckDuckGo](https://duckduckgo.com)
+* [Seznam](https://seznam.cz)
 
-Platform support requires regular maintenance to keep up with changes to the platforms. If something does not work, we
+Engine support requires regular maintenance to keep up with changes to the engines. If something does not work, we
 welcome issues and pull requests.
 
-The extension does not interfere with your normal browsing and never uploads data automatically, only when you 
-explicitly ask it to do so.
+The extension does not interfere with your normal browsing and never uploads data.
 
 ## Installation
 Zoekplaatje is in active development. .xpi files that you can use to install it in your browser are available on the 
@@ -33,11 +35,6 @@ capture from.
 Next, simply search for things as you normally would. While Zoekplaatje is enabled, results will be saved in the 
 background. You can then download the results as a .csv file with the button in the interface when you are done and
 want to inspect the results.
-
-To upload to 4CAT, copy the URL of the website of the 4CAT instance to the "4CAT instance" field at the top of 
-Zeeschuimer's interface. You can then use the "to 4CAT" button to create a new 4CAT dataset from the captured data. 
-After uploading, Zeeschuimer will show you a link and the ten most recently uploaded datasets are shown at the bottom of
-the interface.
 
 ## Credits & license
 Zoekplaatje was developed by Stijn Peeters for the [Digital Methods Initiative](https://digitalmethods.net) and is 
