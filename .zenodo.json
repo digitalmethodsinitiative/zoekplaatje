@@ -1,11 +1,11 @@
 {
   "language": "eng",
   "license": "MPL-2.0",
-  "title": "Zeeschuimer",
+  "title": "Zoekplaatje",
   "upload_type": "software",
-  "version": "v1.8.0",
+  "version": "v1.8.1",
   "keywords": [
-    "scraping", "data capture", "4cat", "instagram", "tiktok"
+    "search engines", "algorithmic auditing", "search results", "data capture", "browser"
   ],
   "creators": [
     {
@@ -15,5 +15,5 @@
     }
   ],
   "access_right": "open",
-  "description": "<p>Zeeschuimer is a browser extension that monitors internet traffic while you are browsing a social media site, and collects data about the items you see in a platform's web interface for later systematic analysis. Its target audience is researchers who wish to systematically study content on social media platforms that resist conventional scraping or API-based data collection.</p><p>This Zenodo record serves as a static, archived version of the Zeeschuimer git repository as it is tagged for release. For the latest version of the code, visit the <a href='https://github.com/digitalmethodsinitiative/zeeschuimer'>GitHub repository</a></p>."
+  "description": "<p>Zoekplaatje is a browser extension that monitors search results as you see them in your browser and allows you to later download them as a .CSV spreadsheet. It is intended to facilitate systematic analysis of search results, e.g. for (algorithmic) bias.</p><p>This Zenodo record serves as a static, archived version of the Zoekplaatje git repository as it is tagged for release. For the latest version of the code, visit the <a href=\"https://github.com/digitalmethodsinitiative/zoekplaatje\">GitHub repository</a>.</p>"
 }
