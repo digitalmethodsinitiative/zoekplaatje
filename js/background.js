@@ -41,6 +41,7 @@ window.zoekplaatje = {
         await db.settings.update("session", session);
         await db.nav.where("session").notEqual(this.session).delete();
 
+        // synchronise browser icon with whether capture is enabled or not
         let self = this;
         setInterval(async function () {
             let enabled = [];
