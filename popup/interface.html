@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<head>
+    <title>Zoekplaatje</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="Content-Security-Policy" content="script-src *;">
+    <link rel="stylesheet" href="tooltips.css">
+    <link rel="stylesheet" href="fontawesome/css/all.css">
+    <!--<script src="../js/webtorrent.min.js"></script>
+    <script src="../js/ponyfill-2.0.2.js"></script>
+    <script src="../js/streamsaver-2.0.3.js"></script>-->
+    <style>
+        :root {
+            --neutral: #D8CBC7;
+            --accent: #3b4152;
+            --neutral-contrast-alt: #9794b4;
+            --accent-alt: #34252F;
+            --panel-background: #adb1c5;
+        }
+
+        *[aria-hidden=true] {
+            display: none;
+        }
+
+        *[aria-hidden=false] {
+            display: auto;
+        }
+
+        @font-face {
+            font-family: 'Open Sans';
+            src: url("../fonts/OpenSans-Regular.ttf")
+        }
+
+        @font-face {
+            font-family: 'Open Sans';
+            font-weight: bold;
+            src: url("../fonts/OpenSans-Bold.ttf")
+        }
+
+        @font-face {
+            font-family: 'Open Sans';
+            font-style: italic;
+            src: url("../fonts/OpenSans-Italic.ttf")
+        }
+
+        @font-face {
+            font-family: 'Open Sans';
+            font-weight: bold;
+            font-style: italic;
+            src: url("../fonts/OpenSans-BoldItalic.ttf")
+        }
+
+        @font-face {
+            font-family: 'Permanent Marker';
+            src: url("../fonts/PermanentMarker-Regular.ttf")
+        }
+
+        html {
+            background: var(--neutral);
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-attachment: fixed;
+        }
+
+        body {
+            font-family: 'Open Sans', sans-serif;
+            color: var(--accent-alt);
+            max-width: 800px;
+            padding: 2em 0 0 0;
+            margin: 0 auto;
+            background: var(--neutral) url('/images/pattern_bw.png');
+            min-height: calc(100% - 2em);
+            border: 0 solid var(--accent);
+            border-width: 0 2px;
+            box-shadow: 0px 0px 200px #444444;
+        }
+
+        article {
+            padding: 0;
+            max-width: 600px;
+            margin: 0 auto 1em auto;
+            background: var(--panel-background);
+            border-radius: 1.5em;
+            border: 2px solid var(--accent-alt);
+            overflow: hidden;
+            box-shadow: 0px 0px 50px #000;
+        }
+
+        h1, h2 {
+            font-size: 3em;
+            font-family: 'Permanent Marker', serif;
+            font-style: italic;
+            font-weight: bold;
+        }
+
+        h2 {
+            font-size: 1.5em;
+        }
+
+        header {
+            margin-top: 0;
+            margin-bottom: 0.5em;
+            padding: 0.25em;
+            background: var(--accent);
+            color: var(--neutral);
+            background-image: url('../images/chirico.png');
+            background-repeat: no-repeat;
+            background-position-x: 0;
+            background-position-y: 0;
+            background-size: contain;
+            position: relative;
+            border-bottom: 1px solid var(--accent)
+        }
+
+        h1, .version {
+            display: inline-block;
+        }
+
+        h1 {
+            text-indent: 1.75em;
+            margin: 0;
+        }
+
+        .version {
+            font-size: 1em;
+            font-family: 'Permanent Marker', serif;
+        }
+
+        body.beta header::after {
+            font-family: 'Permanent Marker', serif;
+            font-weight: bold;
+            transform: rotate(20deg);
+            background: var(--panel-background);
+            color: var(--accent);
+            padding: 0.5em;
+            border-radius: 15px;
+            border: 2px solid var(--accent);
+            content: "⚠ Beta version";
+            position: absolute;
+            right: -1.5em;
+            top: -0.25em;
+            font-size: 80%;
+            text-align: center;
+            display: block;
+            text-indent: 0;
+        }
+
+        h2 span {
+            display: inline;
+            border-bottom: 1px solid var(--accent-alt);
+        }
+
+        header img {
+            display: inline;
+            height: 1em;
+        }
+
+        a {
+            color: var(--accent);
+        }
+
+        section {
+            margin: 0 1em;
+        }
+
+        table {
+            width: 100%;
+            margin: 1em;
+        }
+
+        td, th {
+            text-align: center;
+        }
+
+        td > button:not(:last-child) {
+            margin-right: 0.25em;
+        }
+
+        input:not([type=checkbox]):not([type=radio]), button {
+            background: var(--neutral-contrast-alt);
+            color: var(--accent);
+            border: 2px solid var(--accent);
+            border-radius: 0.5em;
+            padding: 0.25em 0.5em;
+        }
+
+        input:not([type=checkbox]):not([type=radio]):disabled, button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        input[type=submit]:not(:disabled):hover, button:not(:disabled):hover {
+            background: var(--accent);
+            cursor: pointer;
+        }
+
+        input[type=file] {
+            width: 15em;
+        }
+
+        .reset-all {
+            display: block;
+            margin: 0 auto 1em auto;
+        }
+
+        nav ul {
+            list-style: none;
+            padding: 1em;
+            text-align: center;
+            margin: 0;
+        }
+
+        nav li {
+            display: inline-block;
+        }
+
+        nav li:not(:last-child)::after {
+            content: ' \2022';
+        }
+
+        footer a {
+            background: var(--neutral);
+            display: inline-block;
+            padding: 0 0.25em;
+        }
+
+        .fourcat-url-container, .import-container {
+            text-align: center;
+            margin-bottom: 0.5em;
+        }
+
+        #upload-status {
+            text-align: center;
+        }
+
+        .tooltippable:not(a):not(button) {
+            display: inline-block;
+            background: var(--accent);
+            color: var(--neutral);
+            font-size: 0.75em;
+            border-radius: 0.75em;
+            width: 1.5em;
+            height: 1.5em;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        /** fancy checkboxes **/
+        .toggle-switch {
+            display: inline-flex;
+            align-items: center;
+            justify-content: space-around;
+            width: 55px;
+            margin-left: 5px;
+            background-color: var(--neutral-contrast-alt);
+            border-radius: 0.5em;
+            position: relative;
+            cursor: pointer;
+            border: 2px solid var(--accent);
+        }
+
+        .toggle-switch input {
+            -moz-appearance: none;
+            opacity: 0;
+        }
+
+        .toggle-switch label {
+            width: 100%;
+        }
+
+        .toggle:before {
+            content: "";
+            height: 1.1em;
+            width: 1.1em;
+            background-color: var(--panel-background);
+            border-radius: 5px;
+            transition: all 0.2s;
+            position: absolute;
+            left: 5px;
+            top: 10%;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        .toggle:after {
+            content: "OFF";
+            font-size: .5em;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--accent);
+            position: absolute;
+            right: 10%;
+            top: 25%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .toggle-switch input:checked + .toggle:before {
+            transform: translateX(1.7em);
+            right: 10%;
+            background-color: var(--accent);
+        }
+
+        .toggle-switch input:checked + .toggle:after {
+            content: "ON";
+            left: -3em;
+        }
+
+        button.loading, button.loading:hover {
+            background: var(--neutral-contrast-alt) linear-gradient(90deg,
+                var(--neutral-contrast-alt) 0%,
+                var(--accent-alt) 0%,
+                var(--accent-alt) 15px,
+                var(--neutral-contrast-alt) 15px,
+                var(--neutral-contrast-alt) 100%);
+            background-repeat: repeat-y;
+            animation: move 2s linear infinite;
+        }
+
+        @keyframes move {
+            from { background-position-x: -15px; }
+            to { background-position-x: 75px; }
+        }
+    </style>
+    <link rel="shortcut icon" href="/images/icon-96.png">
+</head>
+<body>
+<article>
+    <header>
+        <h1>Zoekplaatje</h1>
+        <span class="version">v1.8.0</span>
+    </header>
+    <section id="status">
+        <h2><span>Captured results</span></h2>
+        <div>
+            <table id="item-table">
+                <thead>
+                <tr>
+                    <th>Active</th>
+                    <th>Platform</th>
+                    <th>Items</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <button class="reset-all"><i class="fa fa-times"></i> Clear all</button>
+        </div>
+    </section>
+</article>
+<footer>
+    <nav>
+        <ul>
+            <li><a href="https://tools.digitalmethods.net">DMI Tools</a></li>
+            <li><a href="https://www.github.com/digitalmethodsinitiative/zoekplaatje">GitHub</a></li>
+            <li><a href="https://cat4smr.humanities.uva.nl">CAT4SMR</a></li>
+            <li><a href="https://doi.org/10.5281/zenodo.6826877">Cite/DOI</a></li>
+        </ul>
+    </nav>
+</footer>
+<script type="text/javascript" src="tooltips.js"></script>
+<script type="text/javascript" src="interface.js"></script>
+</body>

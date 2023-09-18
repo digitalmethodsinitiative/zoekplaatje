@@ -1,0 +1,44 @@
+{
+
+  "description": "Collect results while using search engines for later analysis",
+  "manifest_version": 2,
+  "name": "Zoekplaatje",
+  "version": "1.8.0",
+  "homepage_url": "https://github.com/digitalmethodsinitiative/zoekplaatje",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "update_url": "https://extensions.digitalmethods.net/updates.json"
+    }
+  },
+
+  "icons": {
+    "96": "images/icon-96.png"
+  },
+
+  "browser_action": {
+    "default_icon": "images/icon-96.png",
+    "default_title": "Zoekplaatje"
+  },
+
+  "permissions": [
+    "webRequest", "webRequestBlocking", "webNavigation", "<all_urls>", "storage", "downloads", "activeTab", "tabs",
+    "unlimitedStorage"
+  ],
+
+  "incognito": "not_allowed",
+
+  "background": {
+    "scripts": [
+      "inc/dexie.js",
+      "inc/he.js",
+      "inc/moment.js",
+      "js/background.js",
+      "modules/google.js",
+      "modules/baidu.js",
+      "modules/bing.js",
+      "modules/duckduckgo.js",
+      "modules/seznam.js"
+    ]
+  }
+}
