@@ -17,7 +17,6 @@ zoekplaatje.register_module(
         let path = source_url.split('/').slice(3).join('/');
         let now = moment();
         let index = 1;
-        let estimate;
         const parser = new DOMParser();
         let resultpage;
         let selectors = {
@@ -33,10 +32,6 @@ zoekplaatje.register_module(
         if (path.indexOf('search') === 0 && path.indexOf('q=') > 0 && response.indexOf('<!doctype html>') >= 0) {
             // original result page
             resultpage = parser.parseFromString(response, 'text/html');
-            estimate = parseInt(resultpage.querySelector('#result-stats').innerText.split('(')[0].replace(/[^0-9]/g, ''));
-            if(!estimate) {
-                estimate = 0;
-            }
 
         } else if (path.indexOf('search') === 0 && response.indexOf(')]}\'') === 0) {
             // scroll-loaded extra results
@@ -45,7 +40,6 @@ zoekplaatje.register_module(
 
             // slight difference...
             selectors.results = 'body > div > div > div.g';
-            estimate = 0;
         } else {
             return [];
         }
