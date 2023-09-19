@@ -77,10 +77,17 @@ window.zoekplaatje = {
         filter.onstop = async (event) => {
             let base_url = source_platform_url ? source_platform_url : source_url;
             let source_platform = base_url.split('://').pop().split('/')[0].replace(/^www\./, '').toLowerCase();
-            let enabled_key = 'zs-enabled-' + source_platform;
-            let is_enabled = await browser.storage.local.get(enabled_key);
-            let enabled = is_enabled.hasOwnProperty(enabled_key) && !!parseInt(is_enabled[enabled_key]);
-            if (enabled) {
+
+            let enabled = [];
+            for (const module in zoekplaatje.modules) {
+                const enabled_key = 'zs-enabled-' + module;
+                const is_enabled = await browser.storage.local.get(enabled_key);
+                if (is_enabled.hasOwnProperty(enabled_key) && !!parseInt(is_enabled[enabled_key])) {
+                    enabled.push(module);
+                }
+            }
+
+            if (enabled.length > 0) {
                 zoekplaatje.parse_request(full_response, source_platform_url, source_url, details.tabId);
             }
             filter.disconnect();
