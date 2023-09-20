@@ -23,8 +23,7 @@ zoekplaatje.register_module(
             results: '#rso > div',
             title: 'h3',
             link: 'span > a',
-            description: 'div.VwiC3b, div.ITZIwc',
-            estimate: 'div#result-stats'
+            description: 'div.VwiC3b, div.ITZIwc',  // ugh :(
         };
 
         // check if file contains search results...
