@@ -42,10 +42,9 @@ window.zoekplaatje = {
         await db.nav.where("session").notEqual(this.session).delete();
 
         // synchronise browser icon with whether capture is enabled or not
-        let self = this;
         setInterval(async function () {
             let enabled = [];
-            for (const module in self.modules) {
+            for (const module in zoekplaatje.modules) {
                 const enabled_key = 'zs-enabled-' + module;
                 const is_enabled = await browser.storage.local.get(enabled_key);
                 if (is_enabled.hasOwnProperty(enabled_key) && !!parseInt(is_enabled[enabled_key])) {
@@ -53,6 +52,7 @@ window.zoekplaatje = {
                 }
             }
             let path = enabled.length > 0 ? 'images/icon-96-enabled.png' : 'images/icon-96.png';
+            browser.browserAction.setIcon({path: path})
         }, 500);
     },
 
