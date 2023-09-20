@@ -49,6 +49,7 @@ zoekplaatje.register_module(
                         'timestamp': now.format('YYYY-MM-DD hh:mm:ss'),
                         'source': domain,
                         'query': query,
+                        'type': 'organic',
                         'title': item.querySelector(selectors.title).innerText,
                         'link': item.querySelector(selectors.link).getAttribute('href'),
                         'description': item.querySelector(selectors.description).innerText

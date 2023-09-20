@@ -38,7 +38,8 @@
       "modules/baidu.js",
       "modules/bing.js",
       "modules/duckduckgo.js",
-      "modules/seznam.js"
+      "modules/seznam.js",
+      "modules/yandex.js"
     ]
   }
 }

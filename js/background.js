@@ -146,6 +146,13 @@ window.zoekplaatje = {
 
         let item_list = [];
         for (let module in this.modules) {
+            // check if module is enabled
+            const enabled_key = 'zs-enabled-' + module;
+            const is_enabled = await browser.storage.local.get(enabled_key);
+            if (!is_enabled.hasOwnProperty(enabled_key) || !parseInt(is_enabled[enabled_key])) {
+                continue;
+            }
+            // get items from module parser (will often be an empty list)
             item_list = this.modules[module].callback(response, source_platform_url, source_url, nav_index);
             if (item_list && item_list.length > 0) {
                 await Promise.all(item_list.map(async (item) => {

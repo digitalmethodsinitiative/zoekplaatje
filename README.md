@@ -14,6 +14,7 @@ Currently, it supports the following search engines:
 * [Bing](https://www.bing.com)
 * [Baidu](https://baidu.com)
 * [DuckDuckGo](https://duckduckgo.com)
+* [Yandex](https://yandex.com)
 * [Seznam](https://seznam.cz)
 
 Engine support requires regular maintenance to keep up with changes to the engines. If something does not work, we

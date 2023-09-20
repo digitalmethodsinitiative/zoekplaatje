@@ -40,6 +40,7 @@ zoekplaatje.register_module(
                     'timestamp': now.format('YYYY-MM-DD hh:mm:ss'),
                     'source': domain,
                     'query': query,
+                    'type': 'organic',
                     'title': item['t'],
                     'link': item['c'],
                     'description': item['a']
