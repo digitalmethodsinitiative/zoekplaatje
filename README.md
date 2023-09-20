@@ -20,7 +20,9 @@ Currently, it supports the following search engines:
 Engine support requires regular maintenance to keep up with changes to the engines. If something does not work, we
 welcome issues and pull requests.
 
-The extension does not interfere with your normal browsing and never uploads data.
+The extension does not interfere with your normal browsing and never uploads data. It uses the 
+[WebRequest](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest) browser API to 
+locally collect and parse the data search engines are sending to your browser as you use it. 
 
 ## Installation
 Zoekplaatje is in active development. .xpi files that you can use to install it in your browser are available on the 
@@ -35,7 +37,8 @@ capture from.
 
 Next, simply search for things as you normally would. While Zoekplaatje is enabled, results will be saved in the 
 background. You can then download the results as a .csv file with the button in the interface when you are done and
-want to inspect the results.
+want to inspect the results. Make sure to cross-reference the results with what you see in your browser, at least 
+initially, to understand what data is (and is not!) collected and how it is parsed.
 
 ## Credits & license
 Zoekplaatje was developed by Stijn Peeters for the [Digital Methods Initiative](https://digitalmethods.net) and is 
