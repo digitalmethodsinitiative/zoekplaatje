@@ -317,6 +317,12 @@
             animation: move 2s linear infinite;
         }
 
+        #disclaimer {
+            text-align: center;
+            margin: 1em;
+            font-size: 0.8em;
+        }
+
         @keyframes move {
             from { background-position-x: -15px; }
             to { background-position-x: 75px; }
@@ -336,9 +342,9 @@
             <table id="item-table">
                 <thead>
                 <tr>
-                    <th>Active</th>
-                    <th>Platform</th>
-                    <th>Items</th>
+                    <th>Enable</th>
+                    <th>Engine</th>
+                    <th>Results</th>
                     <th>Actions</th>
                 </tr>
                 </thead>
@@ -347,14 +353,17 @@
             <button class="reset-all"><i class="fa fa-times"></i> Clear all</button>
         </div>
     </section>
+    <section id="disclaimer">
+        Result capture may be incomplete or break as search engines change their interface. Always verify captured data by cross-referencing it with what you see in your browser.
+    </section>
 </article>
 <footer>
     <nav>
         <ul>
-            <li><a href="https://tools.digitalmethods.net">DMI Tools</a></li>
             <li><a href="https://www.github.com/digitalmethodsinitiative/zoekplaatje">GitHub</a></li>
+            <li><a href="https://tools.digitalmethods.net">DMI Tools</a></li>
             <li><a href="https://cat4smr.humanities.uva.nl">CAT4SMR</a></li>
-            <li><a href="https://doi.org/10.5281/zenodo.6826877">Cite/DOI</a></li>
+            <li><a href="https://doi.org/10.5281/zenodo.8356391">Cite/DOI</a></li>
         </ul>
     </nav>
 </footer>
