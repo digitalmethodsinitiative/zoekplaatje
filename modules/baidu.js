@@ -54,13 +54,13 @@ zoekplaatje.register_module(
 
                     if(item.matches('.result')) {
                         // organic result
-                        console.log(item)
                         parsed_item = {...parsed_item,
                             title: item.querySelector(selectors.title).innerText,
                             link: item.querySelector(selectors.link).getAttribute('href'),
                             description: item.querySelector(selectors.description).innerText
                         }
                     } else if(item.querySelector('div[class*=video-main-title]')) {
+                        // video gallery
                         parsed_item = {...parsed_item,
                             type: 'video-widget',
                             title: item.querySelector('h3').innerText,
@@ -70,6 +70,7 @@ zoekplaatje.register_module(
                             }).join(', ')
                         }
                     } else if(item.matches('div[tpl=recommend_list')) {
+                        // 'other people searched for'
                         parsed_item = {
                             ...parsed_item,
                             type: 'suggested-queries',
@@ -78,6 +79,7 @@ zoekplaatje.register_module(
                             description: Array.from(item.querySelectorAll('a')).map(link => link.innerText).join(', ')
                         }
                     } else if (item.matches('div[tpl^=dict]')) {
+                        // dictionary (common when using english queries ;)
                         parsed_item = {
                             ...parsed_item,
                             type: 'dictionary-widget',
@@ -86,6 +88,7 @@ zoekplaatje.register_module(
                             description: item.querySelector('td').innerText
                         }
                     } else if (item.matches('div[tpl*=yl_music_lrc]')) {
+                        // ...music lyrics!
                         parsed_item = {
                             ...parsed_item,
                             type: 'music-lyric-widget',
@@ -94,6 +97,7 @@ zoekplaatje.register_module(
                             description: item.querySelector('div[class*=lrc-scroll]').innerText
                         }
                     } else if (item.matches('div[tpl*=img_normal]')) {
+                        // image gallery
                         parsed_item = {
                             ...parsed_item,
                             type: 'image-widget',
@@ -101,6 +105,7 @@ zoekplaatje.register_module(
                             link: item.querySelector(selectors.link).getAttribute('href')
                         }
                     } else if (item.matches("div[mu*='baike.baidu']")) {
+                        // baike (baidu encyclopedia) excerpt
                         parsed_item = {
                             ...parsed_item,
                             type: 'baike-wiki-widget',
@@ -108,13 +113,15 @@ zoekplaatje.register_module(
                             link: item.querySelector(selectors.link).getAttribute('href')
                         }
                     } else if(item.matches('div[tpl*=tieba_general]')) {
+                        // tieba is a baidu-hosted forum
                         parsed_item = {
                             ...parsed_item,
                             type: 'tieba-widget',
                             title: item.querySelector(selectors.title).innerText,
                             link: item.querySelector(selectors.link).getAttribute('href')
                         }
-                    } else if(item.matches('div[tpl*=_open_source_software')) {
+                    } else if(item.matches('div[tpl*=open_source_software')) {
+                        // code repositories?
                         parsed_item = {
                             ...parsed_item,
                             type: 'software-widget',
@@ -122,6 +129,7 @@ zoekplaatje.register_module(
                             link: item.querySelector(selectors.link).getAttribute('href')
                         }
                     } else if(item.matches('div[tpl*=game-page]')) {
+                        // video game info
                         parsed_item = {
                             ...parsed_item,
                             type: 'game-info-widget',
@@ -129,6 +137,7 @@ zoekplaatje.register_module(
                             link: item.querySelector(selectors.link).getAttribute('href')
                         }
                     } else if(item.matches('div[tpl*=news-realtime]')) {
+                        // news widget
                         parsed_item = {
                             ...parsed_item,
                             type: 'news-widget',
@@ -136,6 +145,7 @@ zoekplaatje.register_module(
                             link: item.querySelector(selectors.link).getAttribute('href')
                         }
                     } else if(item.matches('.c-group-wrapper')) {
+                        // seems to be used generically
                         parsed_item = {
                             ...parsed_item,
                             type: 'misc-widget',
@@ -143,6 +153,7 @@ zoekplaatje.register_module(
                             link: item.querySelector('a').getAttribute('href')
                         }
                     } else if(item.matches('div[tpl*=wenda_abstract')) {
+                        // wenda seems to be Baidu's AI assistant, basically
                         parsed_item = {
                             ...parsed_item,
                             type: 'wenda-ai-widget',
