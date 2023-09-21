@@ -23,7 +23,7 @@ zoekplaatje.register_module(
             results: '#rso > div',
             title: 'h3',
             link: 'span > a',
-            description: 'div.VwiC3b, div.ITZIwc',  // ugh :(
+            description: 'div.VwiC3b, div.ITZIwc, div.xpdopen div.wDYxhc',  // ugh :(
         };
 
         // check if file contains search results...
@@ -63,6 +63,9 @@ zoekplaatje.register_module(
                 // first, 'normal' organic results (a threatened species)
                 if(item.querySelector('div.g') && item.querySelector(selectors.description)) {
                     parsed_item['type'] = item.querySelector('g-img') ? 'organic-showcase' : 'organic';
+                    if(item.querySelector('div[data-attrid*=description]') && item.querySelector('.xpdopen')) {
+                        parsed_item['type'] = 'organic-summary';
+                    }
                     parsed_item = {
                         ...parsed_item,
                         title: item.querySelector(selectors.title).innerText,
