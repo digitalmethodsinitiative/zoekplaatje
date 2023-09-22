@@ -38,6 +38,7 @@
       "modules/baidu.js",
       "modules/bing.js",
       "modules/duckduckgo.js",
+      "modules/najdi.si.js",
       "modules/seznam.js",
       "modules/yandex.js"
     ]
