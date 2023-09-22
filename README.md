@@ -10,12 +10,13 @@ download them as a .CSV spreadsheet. It is intended to facilitate systematic ana
 (algorithmic) bias.
 
 Currently, it supports the following search engines:
-* [Google](https://www.google.com)
-* [Bing](https://www.bing.com)
 * [Baidu](https://baidu.com)
+* [Bing](https://www.bing.com)
 * [DuckDuckGo](https://duckduckgo.com)
-* [Yandex](https://yandex.com)
+* [Google](https://www.google.com)
+* [Najdi.si](https://najdi.si)
 * [Seznam](https://seznam.cz)
+* [Yandex](https://yandex.com)
 
 Engine support requires regular maintenance to keep up with changes to the engines. If something does not work, we
 welcome issues and pull requests.
