@@ -2,6 +2,27 @@ zoekplaatje.register_module(
     'Seznam',
     'search.seznam.cz',
     function (response, source_platform_url, source_url, nav_index) {
+        /**
+         * Get an HTML element's property, safely
+         *
+         * Trying to get e.g. the innerText of a non-existing element crashes
+         * the script, this makes it return an empty string instead.
+         *
+         * @param item
+         * @param prop
+         * @param default_value
+         * @returns {*|string}
+         */
+        function safe_prop(item, prop, default_value='') {
+            if(item && prop.indexOf('attr:') === 0 && item.hasAttribute(prop.split('attr:')[1])) {
+                return item.getAttribute(prop.split('attr:')[1]);
+            } else if(item && prop in item) {
+                return item[prop].trim();
+            } else {
+                return default_value;
+            }
+        }
+
         let results = [];
 
         // source_platform_url = URL in browser
@@ -60,39 +81,39 @@ zoekplaatje.register_module(
                 let query = decodeURI(path.split('q=')[1].split('&')[0].split('#')[0]);
                 for (const item of result_items) {
                     let parsed_item = {
-                        'id': now.format('x') + '-' + index,
-                        'timestamp': now.format('YYYY-MM-DD hh:mm:ss'),
-                        'source': domain,
-                        'query': query,
-                        'type': 'organic',
-                        'title': '',
-                        'link': '',
-                        'real_link': '',
-                        'description': ''
+                        id: now.format('x') + '-' + index,
+                        timestamp: now.format('YYYY-MM-DD hh:mm:ss'),
+                        source: domain,
+                        query: query,
+                        type: 'unknown',
+                        domain: '',
+                        title: '',
+                        description: '',
+                        link: ''
                     };
 
                     if(item.querySelector('h3') && item.querySelector('h3').innerText.indexOf('Obrázky') >= 0) {
                         // image panel
                         parsed_item = {...parsed_item,
                             type: 'image-widget',
-                            title: item.querySelector('h3').innerText,
-                            link: domain + item.querySelector('h3 a').getAttribute('href'),
+                            title: safe_prop(item.querySelector('h3'), 'innerText'),
+                            link: domain + safe_prop(item.querySelector('h3 a'), 'attr:href'),
                         }
                     } else if(item.querySelector('h3') && item.querySelector('h3').innerText.indexOf('Videa') >= 0) {
                         // video panel
                         parsed_item = {
                             ...parsed_item,
                             type: 'video-widget',
-                            title: item.querySelector('h3').innerText,
-                            link: domain + item.querySelector('h3 a').getAttribute('href'),
+                            title: safe_prop(item.querySelector('h3'), 'innerText'),
+                            link: domain + safe_prop(item.querySelector('h3 a'), 'attr:href'),
                         }
                     } else if(item.querySelector('h3') && item.querySelector('h3').innerText.indexOf('Zprávy') >= 0) {
                         // news panel
                         parsed_item = {
                             ...parsed_item,
                             type: 'news-widget',
-                            title: item.querySelector('h3').innerText,
-                            link: domain + item.querySelector('h3 a').getAttribute('href'),
+                            title: safe_prop(item.querySelector('h3'), 'innerText'),
+                            link: domain + safe_prop(item.querySelector('h3 a'), 'attr:href'),
                             description: Array.from(item.querySelectorAll('h4')).map(snippet => snippet.innerText).join(' '),
                         }
                     } else if(item.querySelector('.zboziProductList')) {
@@ -100,8 +121,8 @@ zoekplaatje.register_module(
                         parsed_item = {
                             ...parsed_item,
                             type: 'shopping-widget',
-                            title: item.querySelector('h3').innerText,
-                            link: item.querySelector('h3 a').getAttribute('href'),
+                            title: safe_prop(item.querySelector('h3'), 'innerText'),
+                            link: safe_prop(item.querySelector('h3 a'), 'attr:href'),
                         }
                     } else if(item.querySelector('.PoiMap')) {
                         parsed_item = {
@@ -111,17 +132,17 @@ zoekplaatje.register_module(
                     } else if(item.querySelector('button[role=checkbox]') && item.querySelector('p a').innerText === 'Wikipedia') {
                         parsed_item = {...parsed_item,
                             type: 'wiki-widget',
-                            title: item.querySelector('h3').innerText,
-                            link: item.querySelector('p a').getAttribute('href'),
-                            description: item.querySelector('p').innerText
+                            title: safe_prop(item.querySelector('h3'), 'innerText'),
+                            link: safe_prop(item.querySelector('p a'), 'attr:href'),
+                            description: safe_prop(item.querySelector('p'), 'innerText')
                         }
                     } else if(item.querySelector('.ResultLayout') && item.querySelector('h3 span') && item.querySelector('h3 span').innerText === '›') {
                         // there are various other sites with widgets...
                         parsed_item = {
                             ...parsed_item,
                             type: 'misc-widget',
-                            title: item.querySelector('h3').innerText,
-                            link: item.querySelector('h3 a').getAttribute('href'),
+                            title: safe_prop(item.querySelector('h3'), 'innerText'),
+                            link: safe_prop(item.querySelector('h3 a'), 'attr:href'),
                         }
                     } else if(item.querySelector('h4') === null) {
                         // organic ('normal') result
@@ -129,18 +150,33 @@ zoekplaatje.register_module(
                             return item.parentNode.tagName === 'DIV' && item.parentNode.firstChild === item
                         });
                         parsed_item = {...parsed_item,
-                            type: item.querySelector('.Uee2c048599 svg use').getAttribute('xlink:href').indexOf(organic_badge) >= 0 ? 'organic': 'advertisement',
-                            title: item.querySelector('h3').innerText,
-                            link: item.querySelector('h3 a').getAttribute('href'),
+                            type: item.querySelector('svg use').getAttribute('xlink:href').indexOf(organic_badge) >= 0 ? 'organic': 'advertisement',
+                            title: safe_prop(item.querySelector('h3'), 'innerText'),
+                            link: safe_prop(item.querySelector('h3 a'), 'attr:href'),
                             description: description[0].innerText
                         }
                     } else if(item.querySelector('ul') && item.querySelector('ul li a').getAttribute('href').indexOf('http') !== 0) {
-                        // suggested searches
-                        continue;
+                        // related searches at the bottom
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'related-queries-widget',
+                            title: safe_prop(item.querySelector('h4'), 'innerText'),
+                            description: Array.from(item.querySelectorAll('li a')).map(div => div.innerText.trim()).join(', ')
+                        }
+                    } else if(item.querySelector('h3') && item.querySelector('h3').innerText.indexOf('Nejnovější') >= 0) {
+                        // news widget
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'news-widget',
+                            title: safe_prop(item.querySelector('h3'), 'innerText'),
+                            description: Array.from(item.querySelectorAll('h4')).map(div => div.innerText.trim()).join(', '),
+                            link: 'https:' + Array.from(item.querySelectorAll('a')).slice(-1)[0].getAttribute('href')
+                        }
                     } else {
                         console.log(parsed_item)
                     }
                     index += 1;
+                    parsed_item['domain'] = parsed_item['link'].indexOf('http') === 0 ? parsed_item['link'].split('/')[2] : '';
                     results.push(parsed_item);
                 }
             }

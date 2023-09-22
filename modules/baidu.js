@@ -42,19 +42,21 @@ zoekplaatje.register_module(
                 let query = decodeURI(path.split('wd=')[1].split('&')[0].split('#')[0]);
                 for (const item of result_items) {
                     let parsed_item = {
-                        'id': now.format('x') + '-' + index,
-                        'timestamp': now.format('YYYY-MM-DD hh:mm:ss'),
-                        'source': domain,
-                        'query': query,
-                        'type': 'organic',
-                        'title': '',
-                        'link': '',
-                        'description': ''
+                        id: now.format('x') + '-' + index,
+                        timestamp: now.format('YYYY-MM-DD hh:mm:ss'),
+                        source: domain,
+                        query: query,
+                        type: 'unknown',
+                        domain: '',
+                        title: '',
+                        description: '',
+                        link: ''
                     };
 
                     if(item.matches('.result')) {
                         // organic result
                         parsed_item = {...parsed_item,
+                            type: 'organic',
                             title: item.querySelector(selectors.title).innerText,
                             link: item.querySelector(selectors.link).getAttribute('href'),
                             description: item.querySelector(selectors.description).innerText
