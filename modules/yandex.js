@@ -105,7 +105,11 @@ zoekplaatje.register_module(
                 }
 
                 index += 1;
-                parsed_item['domain'] = parsed_item['link'].indexOf('http') === 0 ? parsed_item['link'].split('/')[2] : '';
+                if(item.querySelector('a.Path-Item b')) {
+                    parsed_item['domain'] = item.querySelector('a.Path-Item b').innerText;
+                } else {
+                    parsed_item['domain'] = parsed_item['link'].indexOf('http') === 0 ? parsed_item['link'].split('/')[2] : '';
+                }
                 results.push(parsed_item);
             }
         }

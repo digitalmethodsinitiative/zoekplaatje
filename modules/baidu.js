@@ -24,7 +24,7 @@ zoekplaatje.register_module(
         const parser = new DOMParser();
         let resultpage;
         let selectors = {
-            results: '#content_left > div.result, #content_left > div.result-op, #content_left > .c-group-wrapper',
+            results: "#content_left > div.result, #content_left > div.result-op, #content_left > .c-group-wrapper, .result-molecule[tpl='app/rs']",
             title: 'h3',
             link: 'h3 a',
             description: 'span[class*=content-right], .c-span-last'
@@ -55,11 +55,19 @@ zoekplaatje.register_module(
 
                     if(item.matches('.result')) {
                         // organic result
-                        parsed_item = {...parsed_item,
+                        parsed_item = {
+                            ...parsed_item,
                             type: 'organic',
                             title: item.querySelector(selectors.title).innerText,
                             link: item.querySelector(selectors.link).getAttribute('href'),
                             description: item.querySelector(selectors.description).innerText
+                        }
+                    } else if(item.matches('[tpl=fy_sg_dictwisenew_san]')) {
+                        parsed_item = {...parsed_item,
+                            type: 'dictionary-help',
+                            title: item.querySelector('div[class*=label-title]').innerText,
+                            description: item.querySelector('div[class*=dict-item]').innerText.trim(),
+                            link: item.querySelector('div[class*=daoliu]').querySelector('a').getAttribute('href'),
                         }
                     } else if(item.querySelector('div[class*=video-main-title]')) {
                         // video gallery
@@ -162,6 +170,13 @@ zoekplaatje.register_module(
                             title: item.querySelector('h2, h3, h4, *[class*=title]').innerText,
                             description: item.querySelector('div[class*=short-answer]').innerText,
                             link: item.querySelector('a').getAttribute('href')
+                        }
+                    } else if(item.matches(".result-molecule[tpl='app/rs']")) {
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'related-queries-widget',
+                            title: item.querySelector('div[class*=rs-label]').innerText,
+                            description: Array.from(item.querySelectorAll('td')).map(t => t.innerText).join(', ')
                         }
                     } else {
                         console.log(item);

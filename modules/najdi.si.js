@@ -9,7 +9,7 @@ zoekplaatje.register_module(
 
         // check if search results...
         let domain = source_url.split('/')[2];
-        if (source_url.indexOf('najdi.si/najdi/') < 0) {
+        if (source_url.indexOf('najdi.si/najdi/') < 0 && source_url.indexOf('najdi.si/rezultati') < 0) {
             return [];
         }
 
@@ -27,7 +27,8 @@ zoekplaatje.register_module(
         // go through results in DOM, using the selectors defined above...
         let result_items = resultpage.querySelectorAll('div.main div.news li')
         if (result_items) {
-            let query = decodeURI(source_url.split('/najdi/')[1].split('/')[0].split('&')[0].split('#')[0]);
+            const bit = source_url.indexOf('/najdi/') >= 0 ? '/najdi/' : '/rezultati/';
+            let query = decodeURI(source_url.split(bit)[1].split('/')[0].split('&')[0].split('#')[0]);
             for (const item of result_items) {
                 let parsed_item = {
                     id: now.format('x') + '-' + index,

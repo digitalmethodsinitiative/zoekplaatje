@@ -68,7 +68,6 @@ zoekplaatje.register_module(
                         || item.matches('#mfa_root')
                         || item.matches('.b_pag')
                         || item.matches('.b_adBottom')
-                        || item.matches('.b_adMiddle')
                         ) {
                         // not results
                         continue;
@@ -230,7 +229,6 @@ zoekplaatje.register_module(
                     }
                     index += 1;
                     parsed_item['real_link'] = !parsed_item['real_link'] || parsed_item['real_link'].indexOf('http') === 0 ? parsed_item['real_link'] : 'https://' + parsed_item['real_link'];
-                    console.log(parsed_item);
                     parsed_item['domain'] = parsed_item['real_link'].indexOf('http') === 0 ? parsed_item['real_link'].split('/')[2] : '';
                     results.push(parsed_item);
                 }

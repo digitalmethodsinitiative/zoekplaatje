@@ -150,7 +150,7 @@ zoekplaatje.register_module(
                             return item.parentNode.tagName === 'DIV' && item.parentNode.firstChild === item
                         });
                         parsed_item = {...parsed_item,
-                            type: item.querySelector('svg use').getAttribute('xlink:href').indexOf(organic_badge) >= 0 ? 'organic': 'advertisement',
+                            type: (!item.querySelector('svg use') || item.querySelector('svg use').getAttribute('xlink:href').indexOf(organic_badge) >= 0) ? 'organic': 'advertisement',
                             title: safe_prop(item.querySelector('h3'), 'innerText'),
                             link: safe_prop(item.querySelector('h3 a'), 'attr:href'),
                             description: description[0].innerText

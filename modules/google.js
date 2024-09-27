@@ -53,6 +53,16 @@ zoekplaatje.register_module(
             }
         }
 
+        function closest_parent(node, selector) {
+            while(node.parentNode) {
+                node = node.parentNode;
+                if(node.matches(selector)) {
+                    return node;
+                }
+            }
+            return null;
+        }
+
         // check if file contains search results...
         // if so, create a DOM with the results we can query via selectors
         let from_page = true;
@@ -83,6 +93,9 @@ zoekplaatje.register_module(
             // difference, but the structure is totally different
             item_selectors = ['#search > div > #rso #kp-wp-tab-overview > div'];
         }
+
+        // big info panel
+        item_selectors.push(':not(#center_col) span[role=tab][data-ti=overview]');
 
         // ads are elsewhere in the hierarchy and, for a change, conveniently
         // labeled
@@ -130,6 +143,18 @@ zoekplaatje.register_module(
                         type: 'sports-widget',
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
                         link: safe_prop(item.querySelector('a'), 'attr:href')
+                    }
+                } else if(item.matches('span[role=tab]')) {
+                    // big info widget thing
+                    const widget_parent = closest_parent(item, '.XqFnDf');
+                    if(widget_parent) {
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'big-overview-widget',
+                            title: widget_parent.querySelector('div[role=heading]').innerText,
+                            link: '',
+                            description: Array.from(widget_parent.querySelectorAll('span[role=tab]')).map(h => h.innerText).join(', ')
+                        }
                     }
                 } else if(item.matches('#Odp5De')) {
                     // 'featured snippet' banner
@@ -335,28 +360,35 @@ zoekplaatje.register_module(
                     let attr_div = item.querySelector("div[data-attrid*='kc:/']");
                     let is_complementary = false;
                     while (attr_div) {
-                        if(attr_div.parentElement && attr_div.parentElement.matches('*[role=complementary]')) {
+                        if (attr_div.parentElement && attr_div.parentElement.matches('*[role=complementary]')) {
                             is_complementary = true;
-                            console.log(attr_div.parentElement);
                             break;
                         }
                         attr_div = attr_div.parentElement;
                     }
 
-                    if(is_complementary) {
+                    if (is_complementary) {
                         // breakout panel to the side, ignore
                         continue;
                     }
 
-                    parsed_item = {...parsed_item,
+                    parsed_item = {
+                        ...parsed_item,
                         type: type,
                         title: safe_prop(item.querySelector('a[role=link]'), 'innerText'),
                         description: Array.from(item.querySelectorAll('div[role=heading]')).map(div => div.innerText.trim()).filter(div => div).join(', ')
                     }
+                } else if (item.querySelector('div[data-viewer-entrypoint]') && item.querySelector('#iur')) {
+                    // image carousel
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'big-image-carousel',
+                        title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
+                    }
                 } else {
                     // unrecognised result type
                     // consider logging and fixing...!
-                    console.log(item)
+                    console.log('unrecognised', item)
                     continue;
                 }
                 parsed_item['domain'] = parsed_item['link'].indexOf('http') === 0 ? parsed_item['link'].split('/')[2] : '';
