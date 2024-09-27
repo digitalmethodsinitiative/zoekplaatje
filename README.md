@@ -12,7 +12,7 @@ download them as a .CSV spreadsheet. It is intended to facilitate systematic ana
 Currently, it supports the following search engines:
 * [Baidu](https://baidu.com)
 * [Bing](https://www.bing.com)
-* [DuckDuckGo](https://duckduckgo.com)
+* [DuckDuckGo](https://duckduckgo.com) (organic results only)
 * [Google](https://www.google.com)
 * [Najdi.si](https://najdi.si)
 * [Seznam](https://seznam.cz)
