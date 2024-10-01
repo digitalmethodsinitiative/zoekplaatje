@@ -101,7 +101,7 @@ zoekplaatje.register_module(
                                 title: ad.querySelector(selectors.title).innerText,
                                 link: ad.querySelector(selectors.link).getAttribute('href'),
                                 real_link: ad.querySelector(selectors.link_real).innerText,
-                                description: ad.querySelector(selectors.description).innerText
+                                description: safe_prop(ad.querySelector(selectors.description), 'innerText')
                             }
                             if(ad_item['link'].indexOf('://') < 0) {
                                 ad_item['link'] = 'https://' + ad_item['link'];
