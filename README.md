@@ -1,7 +1,7 @@
 # 🕵️ Zoekplaatje
 
-[![DOI: 10.5281/zenodo.4742622](https://zenodo.org/badge/DOI/10.5281/zenodo.8356391.svg)](https://doi.org/10.5281/zenodo.8356391)
-[![License: MPL 2.0](https://img.shields.io/badge/license-MPL--2.0-informational)](https://github.com/digitalmethodsinitiative/4cat/blob/master/LICENSE)
+[![DOI: 10.5281/zenodo.8356391](https://zenodo.org/badge/DOI/10.5281/zenodo.8356391.svg)](https://doi.org/10.5281/zenodo.8356391)
+[![License: MPL 2.0](https://img.shields.io/badge/license-MPL--2.0-informational)](https://github.com/digitalmethodsinitiative/zoekplaatje/blob/main/LICENSE)
 
 <p align="center"><img alt="A screenshot of Zoekplaatje's status window" src="images/example_screenshot.png"></p>
 
