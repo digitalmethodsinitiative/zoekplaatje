@@ -39,6 +39,7 @@
       "modules/bing.js",
       "modules/duckduckgo.js",
       "modules/najdi.si.js",
+      "modules/marginalia.js",
       "modules/seznam.js",
       "modules/yandex.js"
     ]
