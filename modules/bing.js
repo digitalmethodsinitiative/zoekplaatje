@@ -106,6 +106,7 @@ zoekplaatje.register_module(
                             if(ad_item['link'].indexOf('://') < 0) {
                                 ad_item['link'] = 'https://' + ad_item['link'];
                             }
+                            ad_item['domain'] = ad_item['real_link'].startsWith('http') ? ad_item['real_link'].split('/')[2] : ad_item['real_link'].split('/')[0];
                             index += 1;
                             results.push(ad_item);
                         }
@@ -224,12 +225,30 @@ zoekplaatje.register_module(
                     } else if(item.matches('.b_canvas') && item.querySelector(':scope > a') && item.querySelectorAll(':scope > *').length === 1) {
                         // 'some results witheld' message
                         continue;
+                    } else if (item.querySelector('.d_ans .b_vPanel .b_dList')) {
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'ai-answer-widget',
+                            title: safe_prop(item.querySelector('.sh-anchor'), 'innerText'),
+                            description: Array.from(item.querySelectorAll('.b_dList li')).map(div => div.innerText.trim()).join(', '),
+                            link: '',
+                            real_link: '',
+                        }
+                    } else if (item.querySelector('.df_alaskcarousel')) {
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'related-questions-carousel',
+                            title: safe_prop(item.querySelector('.b_primtxt'), 'innerText'),
+                            description: Array.from(item.querySelectorAll('.df_qntext')).map(div => div.innerText.trim()).join(', '),
+                            link: '',
+                            real_link: '',
+                        }
                     } else {
                         console.log(item);
                     }
                     index += 1;
                     parsed_item['real_link'] = !parsed_item['real_link'] || parsed_item['real_link'].indexOf('http') === 0 ? parsed_item['real_link'] : 'https://' + parsed_item['real_link'];
-                    parsed_item['domain'] = parsed_item['real_link'].indexOf('http') === 0 ? parsed_item['real_link'].split('/')[2] : '';
+                    parsed_item['domain'] = parsed_item['real_link'].indexOf('http') === 0 ? parsed_item['real_link'].split('/')[2] : parsed_item['real_link'].split('/')[0];
                     results.push(parsed_item);
                 }
             }
