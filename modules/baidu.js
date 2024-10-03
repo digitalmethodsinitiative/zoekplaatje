@@ -30,6 +30,27 @@ zoekplaatje.register_module(
             description: 'span[class*=content-right], .c-span-last'
         };
 
+        /**
+         * Get an HTML element's property, safely
+         *
+         * Trying to get e.g. the innerText of a non-existing element crashes
+         * the script, this makes it return an empty string instead.
+         *
+         * @param item
+         * @param prop
+         * @param default_value
+         * @returns {*|string}
+         */
+        function safe_prop(item, prop, default_value='') {
+            if(item && prop.indexOf('attr:') === 0 && item.hasAttribute(prop.split('attr:')[1])) {
+                return item.getAttribute(prop.split('attr:')[1]);
+            } else if(item && prop in item) {
+                return item[prop].trim();
+            } else {
+                return default_value;
+            }
+        }
+
         // check if file contains search results...
         // if so, create a DOM with the results we can query via selectors
         if (path.indexOf('wd=') > 0) {
@@ -177,6 +198,13 @@ zoekplaatje.register_module(
                             type: 'related-queries-widget',
                             title: item.querySelector('div[class*=rs-label]').innerText,
                             description: Array.from(item.querySelectorAll('td')).map(t => t.innerText).join(', ')
+                        }
+                    } else if(item.querySelector("*[class*='generative-content-container']")) {
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'ai-generated-answer-widget',
+                            title: '',
+                            description: safe_prop(item.querySelector('.cosd-searching-step-content'), 'innerText').trim(),
                         }
                     } else {
                         console.log(item);
