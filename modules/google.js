@@ -79,21 +79,25 @@ zoekplaatje.register_module(
             return [];
         }
 
+        let item_selectors = [];
+        // 'did you mean' search correction
+        item_selectors.push('#fprs');
         // first figure out how to get the results
         // this changes unfortunately, so not trivial
-        let item_selectors = [];
         if(from_page) {
             item_selectors.push('#center_col #rso > div');
         } else {
             item_selectors.push('body > div > div:not(#tvcap)');
         }
 
-        if(resultpage.querySelector('wholepage-tab-history-helper')) {
+        // subject line spanning the top of the page
+        item_selectors.push('.kp-wholepage-osrp');
+
+        if(resultpage.querySelector('wholepage-tab-history-helper, .kp-wholepage-osrp')) {
             // the page has 'tabs', which doesn't seem to make any visual
             // difference, but the structure is totally different
             item_selectors = ['#search > div > #rso #kp-wp-tab-overview > div'];
         }
-
         // big info panel
         item_selectors.push(':not(#center_col) span[role=tab][data-ti=overview]');
 
@@ -136,7 +140,15 @@ zoekplaatje.register_module(
 
 
                 // we have many different result types to deal with here
-                if(item.querySelector('#sports-app')) {
+                if (item.matches('#fprs')) {
+                    // 'did you mean' correction
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'did-you-mean',
+                        title: safe_prop(item.querySelector('#fprsl'), 'innerText')
+                    }
+                }
+                else if(item.querySelector('#sports-app')) {
                     // widget with info about some sports club
                     parsed_item = {
                         ...parsed_item,
@@ -391,6 +403,22 @@ zoekplaatje.register_module(
                     console.log('unrecognised', item)
                     continue;
                 }
+
+                /* DETERMINE SECTION */
+                // Top
+                if (closest_parent(item, '#center_col') ) {
+                    parsed_item['section'] = 'main';
+                }
+                else if (closest_parent(item, '#rhs')) {
+                    parsed_item['section'] = 'sidebar-right';
+                }
+                else {
+                    // everything that's not in #center_col or #rhs is at the top
+                    parsed_item['section'] = 'top';
+                }
+                // Right sidebar (usually part of knowledge graph)
+
+
                 parsed_item['domain'] = parsed_item['link'].indexOf('http') === 0 ? parsed_item['link'].split('/')[2] : '';
                 index += 1;
                 results.push(parsed_item);
