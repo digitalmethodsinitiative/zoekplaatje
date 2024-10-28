@@ -56,11 +56,32 @@ zoekplaatje.register_module(
         function closest_parent(node, selector) {
             while(node.parentNode) {
                 node = node.parentNode;
-                if(node.matches(selector)) {
-                    return node;
+                if (node instanceof HTMLElement) {
+                    if (node.matches(selector)) {
+                        return node;
+                    }
                 }
             }
             return null;
+        }
+
+        function text_from_childless_children(container) {
+            let text = '';
+            // no headers or script tags
+            const valid_tags = ['a', 'div', 'span', 'p'];
+
+            function traverse(node) {
+                if (!node.hasChildNodes()) {
+                    if (node.nodeType === node.TEXT_NODE && valid_tags.includes(node.parentNode.tagName.toLowerCase())) {
+                         text += node.textContent.trim() + ' ';
+                    }
+                } else {
+                    Array.from(node.childNodes).forEach(child => traverse(child));
+                }
+            }
+
+            traverse(container);
+            return text;
         }
 
         // check if file contains search results...
@@ -79,19 +100,31 @@ zoekplaatje.register_module(
             return [];
         }
 
+        let item_selectors = [];
+        // 'did you mean' search correction; always on top
+        item_selectors.push('#fprs');
+
         // first figure out how to get the results
         // this changes unfortunately, so not trivial
-        let item_selectors = [];
         if(from_page) {
             item_selectors.push('#center_col #rso > div');
         } else {
             item_selectors.push('body > div > div:not(#tvcap)');
         }
 
-        if(resultpage.querySelector('wholepage-tab-history-helper')) {
+        if(resultpage.querySelector('wholepage-tab-history-helper, .kp-wholepage-osrp')) {
             // the page has 'tabs', which doesn't seem to make any visual
             // difference, but the structure is totally different
-            item_selectors = ['#search > div > #rso #kp-wp-tab-overview > div'];
+            item_selectors.push('#search > div > #rso #kp-wp-tab-overview > div');
+        }
+
+        // subject line spanning the top of the page
+        item_selectors.push('.kp-wholepage-osrp');
+
+        // widgets in info box on top of the page
+        // only class names...
+        if(resultpage.querySelectorAll('.M8OgIe').length === 1) {
+            item_selectors.push('.WJXODe > div, .e6hL7d > div');
         }
 
         // big info panel
@@ -114,7 +147,7 @@ zoekplaatje.register_module(
         }
 
         const results_selector = item_selectors.join(', ');
-
+        console.log(results_selector)
         // go through results in DOM, using the selectors defined above...
         let result_items = resultpage.querySelectorAll(results_selector);
         if(result_items) {
@@ -136,7 +169,22 @@ zoekplaatje.register_module(
 
 
                 // we have many different result types to deal with here
-                if(item.querySelector('#sports-app')) {
+                if (item.matches('#fprs')) {
+                    // 'did you mean' suggestion box
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'did-you-mean',
+                        title: safe_prop(item.querySelector('#fprsl'), 'innerText')
+                    }
+                } else if (item.matches('.CYJS5e') || item.matches('.QejDDf')) {
+                    // widget info box at top of page
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'big-overview-widget',
+                        title: safe_prop(item.querySelector('div[role=heading], span[role=heading], .pe7FNb'), 'innerText'),
+                        description: text_from_childless_children(item)
+                    }
+                } else if(item.querySelector('#sports-app')) {
                     // widget with info about some sports club
                     parsed_item = {
                         ...parsed_item,
@@ -252,7 +300,7 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
                         description: Array.from(item.querySelectorAll('div[role=heading]')).map(video => {
                             // use video titles as description
-                            return video.querySelector('span').innerText
+                            return safe_prop(item.querySelector('span'), 'innerText');
                         }).join(', ')
                     }
                 } else if(item.querySelector('.PhiYYd') && item.querySelector('a[href*=youtube]')) {
@@ -391,6 +439,22 @@ zoekplaatje.register_module(
                     console.log('unrecognised', item)
                     continue;
                 }
+
+                /* DETERMINE SECTION */
+                // Top
+                if (closest_parent(item, '#center_col') ) {
+                    parsed_item['section'] = 'main';
+                }
+                else if (closest_parent(item, '#rhs')) {
+                    parsed_item['section'] = 'sidebar-right';
+                }
+                else {
+                    // everything that's not in #center_col or #rhs is at the top
+                    parsed_item['section'] = 'top';
+                }
+                // Right sidebar (usually part of knowledge graph)
+
+
                 parsed_item['domain'] = parsed_item['link'].indexOf('http') === 0 ? parsed_item['link'].split('/')[2] : '';
                 index += 1;
                 results.push(parsed_item);

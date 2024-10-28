@@ -37,17 +37,21 @@ zoekplaatje.register_module(
 
         function text_from_childless_children(container) {
             let text = '';
+            // no headers or script tags
+            const valid_tags = ['a', 'div', 'span', 'p'];
 
             function traverse(node) {
-                if (node.nodeType === Node.TEXT_NODE) {
-                    text += node.textContent.trim() + ' ';
+                if (!node.hasChildNodes()) {
+                    if (node.nodeType === node.TEXT_NODE && valid_tags.includes(node.parentNode.tagName.toLowerCase())) {
+                         text += node.textContent.trim() + ' ';
+                    }
                 } else {
-                    node.childNodes.forEach(child => traverse(child));
+                    Array.from(node.childNodes).forEach(child => traverse(child));
                 }
             }
 
             traverse(container);
-            return text.trim();
+            return text;
         }
 
         let results = [];
