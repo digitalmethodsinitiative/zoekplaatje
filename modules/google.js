@@ -71,7 +71,7 @@ zoekplaatje.register_module(
             const valid_tags = ['a', 'div', 'span', 'p'];
 
             function traverse(node) {
-                if (!node.hasChildNodes()) {
+                if (node && !node.hasChildNodes()) {
                     if (node.nodeType === node.TEXT_NODE && valid_tags.includes(node.parentNode.tagName.toLowerCase())) {
                          text += node.textContent.trim() + ' ';
                     }
@@ -178,12 +178,36 @@ zoekplaatje.register_module(
                     }
                 } else if (item.matches('.CYJS5e') || item.matches('.QejDDf')) {
                     // widget info box at top of page
+
+                    let subtype = '';
+                    let description = '';
+                    if (item.querySelector('ol')) {
+                        // big image carousel
+                        subtype = '-carousel';
+                        const el = item.querySelector('ol');
+                        console.log(el);
+                        description = text_from_childless_children();
+                        console.log(description)
+                    } else if (item.matches('.SodP3b')) {
+                        // medium widget (e.g. news)
+                        subtype = '-medium';
+                    } else if (item.matches('.I48dHb')) {
+                        // small widget (e.g. temperature in a country)
+                        subtype = '-small';
+                    }
+
+                    // If no description is found, extract text from the last children
+                    if (description.length < 1) {
+                        description = text_from_childless_children(item);
+                    }
+
                     parsed_item = {
                         ...parsed_item,
-                        type: 'big-overview-widget',
+                        type: 'top-knowledge-widget' + subtype,
                         title: safe_prop(item.querySelector('div[role=heading], span[role=heading], .pe7FNb'), 'innerText'),
-                        description: text_from_childless_children(item)
+                        description: description
                     }
+
                 } else if(item.querySelector('#sports-app')) {
                     // widget with info about some sports club
                     parsed_item = {
