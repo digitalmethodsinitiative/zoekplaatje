@@ -75,7 +75,7 @@ zoekplaatje.register_module(
                     if (node.nodeType === node.TEXT_NODE && valid_tags.includes(node.parentNode.tagName.toLowerCase())) {
                          text += node.textContent.trim() + ' ';
                     }
-                } else {
+                } else if (node) {
                     Array.from(node.childNodes).forEach(child => traverse(child));
                 }
             }
@@ -121,22 +121,20 @@ zoekplaatje.register_module(
         // subject line spanning the top of the page
         item_selectors.push('.kp-wholepage-osrp');
 
-        // widgets in info box on top of the page
+        // big info box on top of the page
+        // We're considering this as one item, even though it has different cards
+        // (this is handled the same for Bing).
         // only class names...
-        if(resultpage.querySelectorAll('.M8OgIe').length === 1) {
-            item_selectors.push('.WJXODe > div, .e6hL7d > div');
-        }
+        item_selectors.push('.M8OgIe');
 
         // big info panel
         item_selectors.push(':not(#center_col) span[role=tab][data-ti=overview]');
 
-        // ads are elsewhere in the hierarchy and, for a change, conveniently
-        // labeled
+        // ads are elsewhere in the hierarchy and, for a change, conveniently labeled
         item_selectors.push('div[aria-label=Ads] > div');
         item_selectors.push('#atvcap > div');
 
-        // there are also 'featured snippets' which are outside of the usual
-        // hierarchy
+        // there are also 'featured snippets' which are outside of the usual hierarchy
         if(resultpage.querySelector("a[href*='featured_snippets']") && resultpage.querySelector("a[href*='featured_snippets']").getAttribute('href').indexOf('support.google') > 0) {
             item_selectors.push('#Odp5De');
         }
@@ -167,7 +165,6 @@ zoekplaatje.register_module(
                     link: ''
                 };
 
-
                 // we have many different result types to deal with here
                 if (item.matches('#fprs')) {
                     // 'did you mean' suggestion box
@@ -176,38 +173,28 @@ zoekplaatje.register_module(
                         type: 'did-you-mean',
                         title: safe_prop(item.querySelector('#fprsl'), 'innerText')
                     }
-                } else if (item.matches('.CYJS5e') || item.matches('.QejDDf')) {
-                    // widget info box at top of page
-
-                    let subtype = '';
-                    let description = '';
-                    if (item.querySelector('ol')) {
-                        // big image carousel
-                        subtype = '-carousel';
-                        const el = item.querySelector('ol');
-                        console.log(el);
-                        description = text_from_childless_children();
-                        console.log(description)
-                    } else if (item.matches('.SodP3b')) {
-                        // medium widget (e.g. news)
-                        subtype = '-medium';
-                    } else if (item.matches('.I48dHb')) {
-                        // small widget (e.g. temperature in a country)
-                        subtype = '-small';
-                    }
-
-                    // If no description is found, extract text from the last children
-                    if (description.length < 1) {
-                        description = text_from_childless_children(item);
-                    }
-
+                } else if (item.querySelector('.hHq9Z')) {
+                    // Top line with entity recognized as the page subject
                     parsed_item = {
                         ...parsed_item,
-                        type: 'top-knowledge-widget' + subtype,
-                        title: safe_prop(item.querySelector('div[role=heading], span[role=heading], .pe7FNb'), 'innerText'),
-                        description: description
+                        type: 'page-subject',
+                        title: safe_prop(item.querySelector('.QpPSMb'), 'innerText'),
+                        description: safe_prop(item.querySelector('.nwVKo'), 'innerText'),
+                        link: '',
                     }
-
+                } else if (item.matches('.M8OgIe')) {
+                    // widget info box at top of page
+                    let subtype = '';
+                    if (item.querySelector('ol')) {
+                        // big image carousel
+                        subtype = '-with-carousel';
+                    }
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'top-info-widget' + subtype,
+                        title: Array.from(item.querySelectorAll('div[role=heading], span[role=heading], .pe7FNb')).map(t => safe_prop(t, 'innerText')).join(', '),
+                        description: text_from_childless_children(item)
+                    }
                 } else if(item.querySelector('#sports-app')) {
                     // widget with info about some sports club
                     parsed_item = {
