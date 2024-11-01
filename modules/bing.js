@@ -189,7 +189,7 @@ zoekplaatje.register_module(
                         // Related searches
                         parsed_item = {
                             ...parsed_item,
-                            type: 'related-searches',
+                            type: 'related-queries',
                             title: item.querySelector('h2').innerText,
                             description: Array.from(item.querySelectorAll('.b_suggestionText')).map(question => question.innerText).join(', '),
 
@@ -198,7 +198,7 @@ zoekplaatje.register_module(
                         // Related searches in the sidebar
                         parsed_item = {
                             ...parsed_item,
-                            type: 'related-searches-sidebar',
+                            type: 'related-queries-sidebar',
                             title: item.querySelector('h2').innerText,
                             description: Array.from(item.querySelectorAll('.suggestion_text')).map(question => question.innerText).join(', '),
                         }
@@ -302,7 +302,7 @@ zoekplaatje.register_module(
                         // related searches at the bottom
                         parsed_item = {
                             ...parsed_item,
-                            type: 'related-queries-widget',
+                            type: 'related-queries',
                             title: safe_prop(item.querySelector('h2'), 'innerText'),
                             description: Array.from(item.querySelectorAll('.b_suggestionText')).map(div => div.innerText.trim()).join(', ')
                         }
@@ -344,7 +344,7 @@ zoekplaatje.register_module(
                     } else if (item.querySelector('.df_alaskcarousel')) {
                         parsed_item = {
                             ...parsed_item,
-                            type: 'related-questions-carousel',
+                            type: 'related-queries-carousel',
                             title: safe_prop(item.querySelector('.b_primtxt'), 'innerText'),
                             description: Array.from(item.querySelectorAll('.df_qntext')).map(div => div.innerText.trim()).join(', '),
                             link: '',
