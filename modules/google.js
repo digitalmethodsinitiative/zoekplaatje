@@ -65,6 +65,20 @@ zoekplaatje.register_module(
             return null;
         }
 
+        function has_content(el) {
+            // Check if the element exists
+            if (!el) {
+                return false;
+            }
+            if (el.textContent.trim() !== "") {
+                return true;
+            }
+            if (el.childNodes.length > 0) {
+                return true;
+            }
+            return false;
+        }
+
         function text_from_childless_children(container) {
             let text = '';
             // no headers or script tags
@@ -73,7 +87,7 @@ zoekplaatje.register_module(
             function traverse(node) {
                 if (!node.hasChildNodes()) {
                     if (node.nodeType === node.TEXT_NODE && valid_tags.includes(node.parentNode.tagName.toLowerCase())) {
-                         text += node.textContent.trim() + ' ';
+                        text += node.textContent.trim() + ' ';
                     }
                 } else {
                     Array.from(node.childNodes).forEach(child => traverse(child));
@@ -106,29 +120,35 @@ zoekplaatje.register_module(
 
         // first figure out how to get the results
         // this changes unfortunately, so not trivial
-        if(from_page) {
+        if (from_page) {
             item_selectors.push('#center_col #rso > div');
         } else {
             item_selectors.push('body > div > div:not(#tvcap)');
         }
 
-        if(resultpage.querySelector('wholepage-tab-history-helper, .kp-wholepage-osrp')) {
+        if (resultpage.querySelector('wholepage-tab-history-helper, .kp-wholepage-osrp')) {
             // the page has 'tabs', which doesn't seem to make any visual
             // difference, but the structure is totally different
-            item_selectors.push('#search > div > #rso #kp-wp-tab-overview > div');
+            // sometimes results are nested, sometimes not...
+            if (resultpage.querySelector('#kp-wp-tab-overview > div.HaEtFf')) {
+                item_selectors.push('#kp-wp-tab-overview > div:not(.HaEtFf), #kp-wp-tab-overview > div.HaEtFf > div');
+            }
+            else {
+                item_selectors.push('#kp-wp-tab-overview > div');
+            }
         }
 
         // subject line spanning the top of the page
-        item_selectors.push('.kp-wholepage-osrp');
+        item_selectors.push('.kp-wholepage-osrp .HdbW6');
 
         // widgets in info box on top of the page
         // only class names...
-        if(resultpage.querySelectorAll('.M8OgIe').length === 1) {
+        if (resultpage.querySelectorAll('.M8OgIe').length === 1) {
             item_selectors.push('.WJXODe > div, .e6hL7d > div');
         }
 
         // big info panel
-        item_selectors.push(':not(#center_col) span[role=tab][data-ti=overview]');
+        //item_selectors.push(':not(#center_col) span[role=tab][data-ti=overview]');
 
         // ads are elsewhere in the hierarchy and, for a change, conveniently
         // labeled
@@ -137,20 +157,25 @@ zoekplaatje.register_module(
 
         // there are also 'featured snippets' which are outside of the usual
         // hierarchy
-        if(resultpage.querySelector("a[href*='featured_snippets']") && resultpage.querySelector("a[href*='featured_snippets']").getAttribute('href').indexOf('support.google') > 0) {
+        if (resultpage.querySelector("a[href*='featured_snippets']") && resultpage.querySelector("a[href*='featured_snippets']").getAttribute('href').indexOf('support.google') > 0) {
             item_selectors.push('#Odp5De');
         }
 
-        // and related searches, for which we only have a class name...
-        if(resultpage.querySelectorAll('.oIk2Cb').length === 1) {
-            item_selectors.push('.oIk2Cb');
-        }
+        // AI answer; contents aren't fetched because they're loaded in later
+        item_selectors.push('#eKIzJc')
+
+        // bottom page stuff that's sometimes not in the main tab
+        item_selectors.push('#bres')
+
+        // Knowledge panel elements
+        item_selectors.push('#rhs > div')
 
         const results_selector = item_selectors.join(', ');
         console.log(results_selector)
+
         // go through results in DOM, using the selectors defined above...
         let result_items = resultpage.querySelectorAll(results_selector);
-        if(result_items) {
+        if (result_items) {
             let query = decodeURI(path.split('q=')[1].split('&')[0].split('#')[0]);
             const domain_prefix = 'https://' + domain;
 
@@ -176,6 +201,40 @@ zoekplaatje.register_module(
                         type: 'did-you-mean',
                         title: safe_prop(item.querySelector('#fprsl'), 'innerText')
                     }
+                } else if (item.matches('#eKIzJc')) {
+                    // AI answer box. Should be loaded!
+                    // todo: add some kind of timeout so this is actually recognised when it's generated.
+                    // css selector for when it's loaded: 'div[id][data-q][data-al]'
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'ai-overview',
+                        title: '',
+                        description: Array.from(item.querySelectorAll('div[data-lht] > div > div')).map(d => d.innerText).join('\n'),
+                        link: Array.from(item.querySelectorAll('#folsrch-sources-1 > div > ul > li > a')).map(d => d.getAttribute('href')).join(','),
+                    }
+                } else if (item.matches(".HdbW6")) {
+                    // page subject
+                    let description = ''
+                    if (item.querySelector('div[data-attrid=subtitle]')) {
+                        description = item.querySelector('div[data-attrid=subtitle]').innerText;
+                    } else {
+                        description = Array.from(item.querySelectorAll('span[data-ti]')).map(h => h.innerText).join(', ');
+                    }
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'page-subject',
+                        title: item.querySelector('div[data-attrid=title]').innerText.trim(),
+                        description: description
+                    }
+                } else if (item.querySelector('.yDIZNe')) {
+                    // page entity widget (e.g. the date of an election).
+                    // looks like the page subject at the top of the page
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'page-entity',
+                        title: item.querySelector('.xrk1Nb').innerText.trim(),
+                        description: item.querySelector('.JKH4td').innerText.trim(),
+                    }
                 } else if (item.matches('.CYJS5e') || item.matches('.QejDDf')) {
                     // widget info box at top of page
                     parsed_item = {
@@ -184,7 +243,7 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('div[role=heading], span[role=heading], .pe7FNb'), 'innerText'),
                         description: text_from_childless_children(item)
                     }
-                } else if(item.querySelector('#sports-app')) {
+                } else if (item.querySelector('#sports-app')) {
                     // widget with info about some sports club
                     parsed_item = {
                         ...parsed_item,
@@ -192,10 +251,10 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
                         link: safe_prop(item.querySelector('a'), 'attr:href')
                     }
-                } else if(item.matches('span[role=tab]')) {
+                } else if (item.matches('span[role=tab]')) {
                     // big info widget thing
                     const widget_parent = closest_parent(item, '.XqFnDf');
-                    if(widget_parent) {
+                    if (widget_parent) {
                         parsed_item = {
                             ...parsed_item,
                             type: 'big-overview-widget',
@@ -204,23 +263,24 @@ zoekplaatje.register_module(
                             description: Array.from(widget_parent.querySelectorAll('span[role=tab]')).map(h => h.innerText).join(', ')
                         }
                     }
-                } else if(item.matches('#Odp5De')) {
+                } else if (item.matches('#Odp5De')) {
                     // 'featured snippet' banner
-                    parsed_item = {...parsed_item,
+                    parsed_item = {
+                        ...parsed_item,
                         type: 'featured-snippet-widget',
                         title: item.querySelector('h3').innerText,
                         link: safe_prop(item.querySelector('span[href]'), 'attr:href'),
                         description: safe_prop(item.querySelector("div[data-attrid='wa:/description']"), 'innerText')
                     }
-                } else if(item.parentNode.matches('div[aria-label=Ads]') || item.matches('#tvcap') || item.parentNode.matches('#atvcap')) {
+                } else if (item.parentNode.matches('div[aria-label=Ads]') || item.querySelector('#tvcap') || item.matches('#tvcap') || item.parentNode.matches('#atvcap') || item.matches('#rhsads')) {
                     // ads! for a change, these are marked quite clearly
                     const type = item.querySelector('g-scrolling-carousel') ? 'advertisement-widget' : 'advertisement';
                     let title = safe_prop(item.querySelectorAll('a div[style*=color]'), 'innerText');
-                    if(!title) {
+                    if (!title) {
                         title = safe_prop(item.querySelector('h3'), 'innerText');
                     }
                     let description = safe_prop(item.querySelector('div[role=heading]'), 'innerText');
-                    if(!title && description) {
+                    if (!title && description) {
                         title = description;
                         description = '';
                     }
@@ -231,15 +291,22 @@ zoekplaatje.register_module(
                         title: title,
                         link: safe_prop(item.querySelector('a[data-pcu]'), 'attr:data-pcu').split(',')[0]
                     }
-                } else if(item.querySelector('g-section-with-header') && item.querySelector("a[href*='tbm=nws']")) {
+                } else if (item.querySelector('c-wiz')) {
+                    // misc widgets (e.g. election maps
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'misc-widget'
+                    }
+                } else if (item.querySelector('g-section-with-header') && item.querySelector("a[href*='tbm=nws']")) {
                     // 'top stories', like news but not quite the same?
-                    parsed_item = {...parsed_item,
+                    parsed_item = {
+                        ...parsed_item,
                         type: 'top-stories-widget',
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
                         description: Array.from(item.querySelectorAll('g-section-with-header div[role=heading]')).slice(1).map(h => h.innerText).join(', '),
                         link: domain_prefix + safe_prop(item.querySelector("a[href*='tbm=nws']"), 'attr:href')
                     }
-                } else if(item.querySelector("a[data-url*='/maps/dir/']") && item.querySelector('async-local-kp')) {
+                } else if (item.querySelector("a[data-url*='/maps/dir/']") && item.querySelector('async-local-kp')) {
                     // a maps widget with related locations
                     parsed_item = {
                         ...parsed_item,
@@ -247,7 +314,7 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('h2'), 'innerText'),
                         link: domain_prefix + item.querySelector('a').getAttribute('href')
                     }
-                } else if(item.querySelector('product-viewer-group')) {
+                } else if (item.querySelector('product-viewer-group')) {
                     // shopping widget, with related products to buy
                     parsed_item = {
                         ...parsed_item,
@@ -257,7 +324,7 @@ zoekplaatje.register_module(
                         title: '',
                         link: ''
                     }
-                } else if(item.querySelector('g-section-with-header') && item.querySelector('hr[role=presentation]') && item.querySelector('.gduDCb')) {
+                } else if (item.querySelector('g-section-with-header') && item.querySelector('hr[role=presentation]') && item.querySelector('.gduDCb, .yG4QQe')) {
                     // latest news articles
                     parsed_item = {
                         ...parsed_item,
@@ -266,7 +333,7 @@ zoekplaatje.register_module(
                         description: Array.from(item.querySelectorAll('div[role=heading]')).slice(1).map(h => h.innerText).join(', '),
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
                     }
-                } else if(item.querySelector('g-scrolling-carousel') && Array.from(item.querySelectorAll('span')).filter(item => item.innerText === 'Twitter').length > 0) {
+                } else if (item.querySelector('g-scrolling-carousel') && Array.from(item.querySelectorAll('span')).filter(item => item.innerText === 'Twitter').length > 0) {
                     // a number of recent tweets
                     parsed_item = {
                         ...parsed_item,
@@ -274,7 +341,7 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('g-link h3'), 'innerText'),
                         link: safe_prop(item.querySelector('cite'), 'innerText')
                     }
-                } else if(item.querySelector('g-scrolling-carousel') && Array.from(item.querySelectorAll('span')).filter(item => item.innerText === 'TikTok').length > 0) {
+                } else if (item.querySelector('g-scrolling-carousel') && Array.from(item.querySelectorAll('span')).filter(item => item.innerText === 'TikTok').length > 0) {
                     // a number of recent tiktok posts
                     parsed_item = {
                         ...parsed_item,
@@ -282,7 +349,7 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('h3'), 'innerText'),
                         link: safe_prop(item.querySelector('a'), 'attr:href')
                     }
-                } else if(item.querySelector('title-with-lhs-icon a') &&
+                } else if (item.querySelector('title-with-lhs-icon a') &&
                     item.querySelector('title-with-lhs-icon a').getAttribute('href').indexOf('tbm=isch') > 0
                 ) {
                     // image search widget, showing top image search results
@@ -292,7 +359,7 @@ zoekplaatje.register_module(
                         link: domain + safe_prop(item.querySelector('title-with-lhs-icon a'), 'attr:href'),
                         title: safe_prop(item.querySelector('h3[role=heading]'), 'innerText')
                     }
-                } else if((item.querySelector('div[role=presentation]') && item.querySelector('cite') && item.querySelector('img[src*=data]')) || item.querySelector("g-more-link a[href*='tbm=vid']")) {
+                } else if ((item.querySelector('div[role=presentation]') && item.querySelector('cite') && item.querySelector('img[src*=data]')) || item.querySelector("g-more-link a[href*='tbm=vid']")) {
                     // video widget, showing related videos
                     parsed_item = {
                         ...parsed_item,
@@ -303,14 +370,15 @@ zoekplaatje.register_module(
                             return safe_prop(item.querySelector('span'), 'innerText');
                         }).join(', ')
                     }
-                } else if(item.querySelector('.PhiYYd') && item.querySelector('a[href*=youtube]')) {
+                } else if (item.querySelector('.PhiYYd') && item.querySelector('a[href*=youtube]')) {
                     // single large video
-                    parsed_item = {...parsed_item,
+                    parsed_item = {
+                        ...parsed_item,
                         type: 'single-video-youtube-widget',
                         link: safe_prop(item.querySelector('a'), 'attr:href'),
                         title: safe_prop(item.querySelector('.PhiYYd h3'), 'innerText')
                     }
-                } else if(item.querySelector('.related-question-pair')) {
+                } else if (item.querySelector('.related-question-pair')) {
                     // 'related questions'
                     // seems to be LLM-generated, to some extent
                     parsed_item = {
@@ -320,16 +388,17 @@ zoekplaatje.register_module(
                         description: Array.from(item.querySelectorAll('.related-question-pair')).map(question => question.getAttribute('data-q')).join(', '),
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
                     }
-                } else if(item.querySelector('wp-grid-view') && item.querySelector('.a-no-hover-decoration') && item.querySelector('.ZVHLgc')) {
+                } else if (item.querySelector('.ZsAbe') || (item.querySelector('wp-grid-view') && item.querySelector('.a-no-hover-decoration') && item.querySelector('.ZVHLgc'))) {
                     // 'recommendations'
                     // recommended places to visit (?)
-                    parsed_item = {...parsed_item,
+                    parsed_item = {
+                        ...parsed_item,
                         type: 'recommended-widget',
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
                         link: domain_prefix + safe_prop(item.querySelector("a[href^='/search']:not(.a-no-hover-decoration)"), 'attr:href'),
                         description: Array.from(item.querySelectorAll('a.a-no-hover-decoration')).map(a => a.getAttribute('title')).join(', ')
                     }
-                } else if(item.querySelector('div.g') && item.querySelector(selectors.description)) {
+                } else if (item.querySelector('div.g') && item.querySelector(selectors.description)) {
                     if (item.querySelector('div[role=complementary]')) {
                         // embedded sidebar item???
                         item.querySelector('div[role=complementary]').remove();
@@ -346,7 +415,7 @@ zoekplaatje.register_module(
                         link: safe_prop(item.querySelector(selectors.title).parentNode, 'attr:href'),
                         description: safe_prop(item.querySelector(selectors.description), 'innerText')
                     }
-                } else if(item.querySelector('div[role=listitem][data-attrid*=books]')) {
+                } else if (item.querySelector('div[role=listitem][data-attrid*=books]')) {
                     // books widget...
                     parsed_item = {
                         ...parsed_item,
@@ -354,7 +423,7 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('a[role=link]'), 'innerText'),
                         description: Array.from(item.querySelectorAll('div[role=heading]')).map(div => div.innerText.trim()).filter(div => div).join(', ')
                     }
-                } else if(item.querySelector('div[data-item-card][data-attrid*=movies]')) {
+                } else if (item.querySelector('div[data-item-card][data-attrid*=movies]')) {
                     // movies widget
                     parsed_item = {
                         ...parsed_item,
@@ -362,7 +431,7 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('a[role=link]'), 'innerText'),
                         description: Array.from(item.querySelectorAll('div[role=heading]')).map(div => div.innerText.trim()).filter(div => div).join(', ')
                     }
-                } else if(item.querySelector("div[data-attrid*='music/recording']")) {
+                } else if (item.querySelector("div[data-attrid*='music/recording']")) {
                     // movies widget
                     parsed_item = {
                         ...parsed_item,
@@ -370,36 +439,52 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('a[role=link]'), 'innerText'),
                         description: Array.from(item.querySelectorAll('div.title')).map(div => div.parentNode.innerText.trim()).filter(div => div).join(', ')
                     }
-                } else if(item.querySelector('div[role=listitem][data-attrid*=downwards]')) {
+                } else if (item.querySelector('div[role=listitem][data-attrid*=downwards]')) {
                     // 'near me' widget... kind of weird
-                    parsed_item = {...parsed_item,
+                    parsed_item = {
+                        ...parsed_item,
                         type: 'near-me-widget',
                         title: safe_prop(item.querySelector('a[role=link]'), 'innerText'),
                         description: Array.from(item.querySelectorAll('div[role=heading]')).map(div => div.innerText.trim()).filter(div => div).join(', ')
                     }
-                } else if(item.querySelector("div[data-attrid*='music/artist:songs']")) {
-                    parsed_item = {...parsed_item,
+                } else if (item.querySelector("div[data-attrid*='music/artist:songs']")) {
+                    parsed_item = {
+                        ...parsed_item,
                         type: 'song-widget',
                         title: safe_prop(item.querySelector('a[role=link]'), 'innerText'),
                         description: Array.from(item.querySelectorAll('div.title')).map(div => div.parentNode.innerText.trim()).filter(div => div).join(', ')
                     }
-                } else if(item.matches('.oIk2Cb')) {
+                } else if (item.querySelector('.oIk2Cb')) {
                     // alas, class names
                     // related searches at the bottom
+                    // related searches can be in a list or in a carousel
+                    // get description for both
+                    let description = Array.from(item.querySelectorAll('div')).filter(div => !div.querySelector('span, div')).map(div => div.innerText.trim()).filter(div => div.length)
+
+                    if (item.querySelector('div[aria-level][aria-hidden][role=heading]')) {
+                        const tab_texts = Array.from(item.querySelectorAll('div[aria-level][aria-hidden][role=heading]')).map(a => a.innerText.trim())
+                        description = description.concat(tab_texts)
+                    }
+                    if (item.querySelector('.b2Rnsc')) {
+                        const list_texts = Array.from(item.querySelectorAll('.b2Rnsc')).map(div => div.innerText.trim())
+                        description = description.concat(list_texts)
+                    }
+                    description = description.join(', ')
+
                     parsed_item = {
                         ...parsed_item,
                         type: 'related-queries-widget',
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
-                        description: Array.from(item.querySelectorAll('div')).filter(div => !div.querySelector('span, div')).map(div => div.innerText.trim()).filter(div => div.length).join(', ')
+                        description: description
                     }
-                } else if(item.querySelector('a[data-ti*=lyrics]')) {
+                } else if (item.querySelector('a[data-ti*=lyrics]')) {
                     parsed_item = {
                         ...parsed_item,
                         type: 'lyrics-widget',
                         title: safe_prop(item.querySelector('a[role=link]'), 'innerText'),
                         description: Array.from(item.querySelectorAll('div[jsname] > span')).map(div => div.innerText.trim()).filter(div => div).join(', ')
                     }
-                } else if(item.querySelector("div[data-attrid*='kc:/']")) {
+                } else if (item.querySelector("div[data-attrid*='kc:/']")) {
                     // generic semantic web widget
                     // use semantic reference type as widget type
                     const type = item.querySelector("div[data-attrid*='kc:/']").getAttribute('data-attrid').split(':')[1].replace(/\//g, '-').substring(1) + '-widget';
@@ -433,26 +518,26 @@ zoekplaatje.register_module(
                         type: 'big-image-carousel',
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
                     }
-                } else {
+                }
+                else {
                     // unrecognised result type
                     // consider logging and fixing...!
-                    console.log('unrecognised', item)
-                    continue;
+                    console.log('unknown', item)
+                    if (!has_content(item)) {
+                        console.log('empty item, skipping for now')
+                    }
                 }
 
                 /* DETERMINE SECTION */
                 // Top
-                if (closest_parent(item, '#center_col') ) {
-                    parsed_item['section'] = 'main';
-                }
-                else if (closest_parent(item, '#rhs')) {
+                if (closest_parent(item, '#rhs')) {
                     parsed_item['section'] = 'sidebar-right';
-                }
-                else {
+                } else if (closest_parent(item, '#center_col')) {
+                    parsed_item['section'] = 'main';
+                } else {
                     // everything that's not in #center_col or #rhs is at the top
                     parsed_item['section'] = 'top';
                 }
-                // Right sidebar (usually part of knowledge graph)
 
 
                 parsed_item['domain'] = parsed_item['link'].indexOf('http') === 0 ? parsed_item['link'].split('/')[2] : '';
@@ -473,5 +558,6 @@ zoekplaatje.register_module(
         }
 
         return results;
+
     }
 );
