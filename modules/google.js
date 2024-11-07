@@ -83,7 +83,7 @@ zoekplaatje.register_module(
         // this changes unfortunately, so not trivial
         let item_selectors = [];
         if(from_page) {
-            item_selectors.push('#center_col #rso > div > div');
+            item_selectors.push('#center_col #rso div[class=MjjYud]');
         } else {
             item_selectors.push('body > div > div:not(#tvcap)');
         }
