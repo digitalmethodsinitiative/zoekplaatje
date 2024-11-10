@@ -2,6 +2,7 @@ zoekplaatje.register_module(
     'Google',
     'google.com',
     function (response, source_platform_url, source_url, nav_index) {
+        //console.log(response)
         let results = [];
         let results_sidebar = [];
 
@@ -70,11 +71,9 @@ zoekplaatje.register_module(
             // Check if the element exists
             if (!el) {
                 return false;
-            }
-            if (el.textContent.trim() !== "") {
+            } if (el.textContent.trim() !== "") {
                 return true;
-            }
-            if (el.childNodes.length > 0) {
+            } if (el.childNodes.length > 0) {
                 return true;
             }
             return false;
@@ -84,7 +83,6 @@ zoekplaatje.register_module(
             let text = '';
             // no headers or script tags
             const valid_tags = ['a', 'div', 'span', 'p'];
-
             function traverse(node) {
                 if (node && !node.hasChildNodes()) {
                     if (node.nodeType === node.TEXT_NODE && valid_tags.includes(node.parentNode.tagName.toLowerCase())) {
@@ -116,26 +114,42 @@ zoekplaatje.register_module(
         }
 
         let item_selectors = [];
+
         // 'did you mean' search correction; always on top
-        item_selectors.push('#fprs, #taw');
+        item_selectors.push('#fprs');
 
         // first figure out how to get the search results
         // this changes unfortunately, so not trivial
         if (from_page) {
-            item_selectors.push('#center_col #rso > div');
-            // sometimes it happens that there's a 'main' featured box on top of
-            // the search, with organic results nested underneath (tested with query 'gemini')
-            item_selectors.push('#center_col #rso > div:not([class]) > div');
+            // Different types of main search results:
+            //  1: A result list with a specific div for the first result and the other results nested afterwards.
+            //  2: Results as divs under #kp-wp-tab-overview
+            //  3: An old-school general result list with divs right under #rso
+            if (resultpage.querySelector('#center_col #rso > div:not([class])')){
+                item_selectors.push('#center_col #rso > div.hlcw0c') // first result
+                item_selectors.push('#center_col #rso > div:not([class]) > div'); // other results
+            } else if (resultpage.querySelector('#search #rso .kp-wholepage #kp-wp-tab-cont-overview')) {
+                item_selectors.push('#rso #kp-wp-tab-overview > div');
+            } else {
+                item_selectors.push('#center_col #rso > div')
+            }
         } else {
             item_selectors.push('body > div > div:not(#tvcap)');
         }
 
         if (resultpage.querySelector('wholepage-tab-history-helper, .kp-wholepage-osrp')) {
-            // the page has 'tabs', which doesn't seem to make any visual
-            // difference, but the structure is totally different
+            // the page has 'tabs', which may refer to the main results and the knowledge graph.
             // sometimes results are nested, sometimes not...
+            // #kp-wp-tab-overview can also be the knowledge graph, to make it even more complicated...
             if (resultpage.querySelector('#kp-wp-tab-overview > div.HaEtFf')) {
                 item_selectors.push('#kp-wp-tab-overview > div:not(.HaEtFf), #kp-wp-tab-overview > div.HaEtFf > div');
+
+                // related searches are sometimes within the main tab section, sometimes not
+                // if not, use css selectors directly.
+                if(resultpage.querySelectorAll('.oIk2Cb').length === 1) {
+                    // can be both lists and carousels
+                    item_selectors.push('.oIk2Cb > .FalWJb, .oIk2Cb > .y6Uyqe');
+                }
             }
             else {
                 item_selectors.push('#kp-wp-tab-overview > div');
@@ -148,17 +162,14 @@ zoekplaatje.register_module(
 
         // subject line spanning the top of the page
         item_selectors.push('.kp-wholepage-osrp .HdbW6');
-        item_selectors.push('#rcnt > .XqFnDf');
 
         // big info box on top of the page
-        // We're considering this as one item, even though it has different cards
-        // (this is handled the same for Bing).
-        // only class names...
+        // consider different cards as different items
         if (resultpage.querySelectorAll('.M8OgIe').length === 1) {
             item_selectors.push('.WJXODe > div, .e6hL7d > div');
         }
 
-        // big info panel
+        // big info panel; seems to be captured by selectors above already
         //item_selectors.push(':not(#center_col) span[role=tab][data-ti=overview]');
 
         // ads are elsewhere in the hierarchy and, for a change, conveniently labeled
@@ -170,25 +181,28 @@ zoekplaatje.register_module(
             item_selectors.push('#Odp5De');
         }
 
-        // AI answer; contents aren't fetched because they're loaded in later
+        // AI answer (todo: contents aren't fetched because they're loaded in later)
         item_selectors.push('#eKIzJc')
 
         // bottom page stuff that's sometimes not in the main tab
         item_selectors.push('#bres')
 
-        // related searches, for which we only have a class name...
-        if(resultpage.querySelectorAll('.oIk2Cb').length === 1) {
-            // can be both lists and carousels
-            item_selectors.push('.oIk2Cb > .FalWJb, .oIk2Cb > .y6Uyqe');
-        }
-
         // Knowledge graph widgets on the right sidebar
+        // #rso is the search results, #rhs is the knowledge graph.
         // Some empty/irrelevant divs don't have class names, so only include those that do.
-        // We're skipping ads included in the knowledge graph at the moment.
-        item_selectors.push('#rhs > div[class], #rhs > block-component');
-
-        const results_selector = item_selectors.join(', ');
-        console.log(results_selector)
+        if (resultpage.querySelector('#rhs #kp-wp-tab-cont-overview')) {
+            // Knowledge graph subject header
+            item_selectors.push('#rhs #kp-wp-tab-cont-overview .KsRP6')
+            // Different knowledge graph boxes like wikipedia info and images
+            item_selectors.push('#rhs #kp-wp-tab-overview > div')
+        }
+        else {
+            item_selectors.push('#rhs > div[id], #rhs > block-component');
+            // Sometimes we explicitly need to set knowledge graph elements
+            // I guess the DOM is transformed with JS after page load?
+            item_selectors.push('#rhs .kno-rdesc')
+        }
+        const results_selector = item_selectors.join(', ');console.log(results_selector)
 
         // go through results in DOM, using the selectors defined above...
         let result_items = resultpage.querySelectorAll(results_selector);
@@ -219,12 +233,6 @@ zoekplaatje.register_module(
                     description: '',
                     link: ''
                 };
-
-                if (item.matches('#rhs')) {
-                    // todo: knowledge graph div shouldn't get selected as a whole but does...
-                    // Can't figure out how to exclude from the selector list - Sal
-                    continue;
-                }
 
                 if (item.matches('#fprs') || (item.matches('#taw') && item.querySelector('omnient-visibility-control'))) {
                     // 'did you mean' suggestion box
@@ -275,9 +283,14 @@ zoekplaatje.register_module(
                     }
                 } else if (item.matches('.CYJS5e') || item.matches('.QejDDf')) {
                     // widget info box at top of page
+                    let subtype = '';
+                    if (item.querySelector('ol')) {
+                        // big image carousel
+                        subtype = '-with-carousel';
+                    }
                     parsed_item = {
                         ...parsed_item,
-                        type: 'top-info-widget' + subtype,
+                        type: 'info-card' + subtype,
                         title: Array.from(item.querySelectorAll('div[role=heading], span[role=heading], .pe7FNb')).map(t => safe_prop(t, 'innerText')).join(', '),
                         description: text_from_childless_children(item)
                     }
@@ -330,7 +343,7 @@ zoekplaatje.register_module(
                         link: safe_prop(item.querySelector('a[data-pcu]'), 'attr:data-pcu').split(',')[0]
                     }
                 } else if (item.querySelector('c-wiz')) {
-                    // misc widgets (e.g. election maps
+                    // misc widgets (e.g. election maps)
                     parsed_item = {
                         ...parsed_item,
                         type: 'misc-widget'
@@ -427,7 +440,7 @@ zoekplaatje.register_module(
                         description: Array.from(item.querySelectorAll('.related-question-pair')).map(question => question.getAttribute('data-q')).join(', '),
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
                     }
-                } else if (item.querySelector('.ZsAbe') || (item.querySelector('wp-grid-view') && item.querySelector('.a-no-hover-decoration') && item.querySelector('.ZVHLgc'))) {
+                } else if (item.querySelector('.ZsAbe') || (item.querySelector('wp-grid-view') && item.querySelector('.a-no-hover-decoration') && item.querySelector('.ZVHLgc')) || item.querySelector('.VqeGe')) {
                     // 'recommendations'
                     // recommended places to visit (?)
                     parsed_item = {
@@ -533,10 +546,6 @@ zoekplaatje.register_module(
                     // get description for both
                     let description = Array.from(item.querySelectorAll('div')).filter(div => !div.querySelector('span, div')).map(div => div.innerText.trim()).filter(div => div.length)
 
-                    if (item.querySelector('div[aria-level][aria-hidden][role=heading]')) {
-                        const tab_texts = Array.from(item.querySelectorAll('div[aria-level][aria-hidden][role=heading]')).map(a => a.innerText.trim())
-                        description = description.concat(tab_texts)
-                    }
                     if (item.querySelector('.b2Rnsc')) {
                         const list_texts = Array.from(item.querySelectorAll('.b2Rnsc')).map(div => div.innerText.trim())
                         description = description.concat(list_texts)
@@ -599,34 +608,35 @@ zoekplaatje.register_module(
                     if (item.querySelector('div[aria-level="2"][role=heading]')) {
                         title = item.querySelector('div[aria-level="2"][role=heading]').innerText.trim();
                     }
-
                     parsed_item = {
                         ...parsed_item,
                         type: 'related-queries-carousel',
                         title: title,
                         description: related_searches
                     }
-                } else if (item.matches('.y6Uyqe')) {
-                    // alas, class names
-                    // related searches at the bottom
-                    let related_searches = Array.from(item.querySelectorAll('.dg6jd')).map(div => div.innerText.trim()).join(', ')
-
-                    parsed_item = {
-                        ...parsed_item,
-                        type: 'related-queries',
-                        title: '',
-                        description: related_searches
-                    }
                 } else if (item.matches('.oIk2Cb')) {
                     // skip related search wrapper
                     continue
-                } else if (item.querySelector('.osrp-blk')) {
+                } else if (item.querySelector('.osrp-blk') || item.querySelector('div.kno-rdesc')
+                || item.matches('div.kno-rdesc')) {
                     // wiki knowledge graph on the right
+                    // sometimes directly selected with div.kno-rdesc, sometimes not
+                    let title = ''
+                    let description = ''
+                    // sometimes has a title, sometimes not
+                    if (item.querySelector('div[data-attrid=title]')) {
+                        title = item.querySelector('div[data-attrid=title]').innerText;
+                    }
+                    if (item.matches('div.kno-rdesc')) {
+                        description = text_from_childless_children(item)
+                    } else {
+                        description = text_from_childless_children(item.querySelector('div.kno-rdesc'))
+                    }
                     parsed_item = {
                         ...parsed_item,
                         type: 'wiki-widget',
-                        title: item.querySelector('div[data-attrid=title]').innerText,
-                        description: item.querySelector('div.kno-rdesc > span').innerText
+                        title: title,
+                        description: description
                     }
                 } else if (item.querySelector('block-component') && closest_parent(item, '#rhs')) {
                     // Semantic box with 'results for'; same as 'organic showcase'
@@ -671,12 +681,23 @@ zoekplaatje.register_module(
                         title: title,
                         description: description
                     }
+                } else if (item.querySelector('#media_result_group.kno-mrg.kno-swp')) {
+                    // images widget in knowledge graph
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'images-widget'
+                    }
                 } else {
                     // unrecognised result type
                     // consider logging and fixing...!
                     console.log('unknown', item)
+                    parsed_item = {
+                        ...parsed_item,
+                        description: text_from_childless_children(item)
+                    }
                     if (!has_content(item)) {
-                        console.log('empty item, skipping for now')
+                        console.log('empty item, skipping for now');
+                        continue;
                     }
                 }
 
@@ -694,11 +715,10 @@ zoekplaatje.register_module(
                     parsed_item['section'] = 'top';
                 }
 
-
                 parsed_item['domain'] = parsed_item['link'].indexOf('http') === 0 ? parsed_item['link'].split('/')[2] : '';
                 index += 1;
 
-                // Sidebar items are sometimes interspersed with main SERP items.
+                // Sidebar items are sometimes interspersed with main SERP items in response.
                 // Add them at the end to keep the ranking in place.
                 if (parsed_item['section'] === 'sidebar-right') {
                     results_sidebar.push(parsed_item);
