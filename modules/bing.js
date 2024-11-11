@@ -13,6 +13,7 @@ zoekplaatje.register_module(
          * @param default_value
          * @returns {*|string}
          */
+
         function safe_prop(item, prop, default_value='') {
             if(item && prop.indexOf('attr:') === 0 && item.hasAttribute(prop.split('attr:')[1])) {
                 return item.getAttribute(prop.split('attr:')[1]);
@@ -35,17 +36,28 @@ zoekplaatje.register_module(
             return null;
         }
 
+        function has_content(el) {
+            // Check if the element exists
+            if (!el) {
+                return false;
+            } if (el.textContent.trim() !== "") {
+                return true;
+            } if (el.childNodes.length > 0) {
+                return true;
+            }
+            return false;
+        }
+
         function text_from_childless_children(container) {
             let text = '';
             // no headers or script tags
             const valid_tags = ['a', 'div', 'span', 'p'];
-
             function traverse(node) {
-                if (!node.hasChildNodes()) {
+                if (node && !node.hasChildNodes()) {
                     if (node.nodeType === node.TEXT_NODE && valid_tags.includes(node.parentNode.tagName.toLowerCase())) {
                          text += node.textContent.trim() + ' ';
                     }
-                } else {
+                } else if (node) {
                     Array.from(node.childNodes).forEach(child => traverse(child));
                 }
             }
@@ -82,6 +94,9 @@ zoekplaatje.register_module(
             link_real: 'cite',
             description: 'p'
         };
+
+        console.log("Selecting items with the following CSS selectors:")
+        console.log(selectors.results);
 
         // check if file contains search results...
         // if so, create a DOM with the results we can query via selectors
@@ -144,6 +159,14 @@ zoekplaatje.register_module(
                             results.push(ad_item);
                         }
                         continue;
+                    } else if (item.querySelector('#FinanceCarouselV2')) {
+                        // big stock slider on top of the page
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'stock-slider',
+                            title: item.querySelector('a[title] > div').innerText.trim(),
+                            description: text_from_childless_children(item)
+                        }
                     } else if (item.matches('.b_nwsAns')) {
                         // news overview
                         parsed_item = {
@@ -209,6 +232,23 @@ zoekplaatje.register_module(
                             type: 'ai-generated-story',
                             title: item.querySelector('.sto_title').innerText,
                             description: Array.from(item.querySelectorAll('.sto_snippet')).map(snippet => snippet.innerText).join(' '),
+                        }
+                    } else if (item.matches('.b_richnews')) {
+                        // News widget
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'news-widget',
+                            title: item.querySelector('#nws_ht').innerText,
+                            description: text_from_childless_children(item),
+                            link: Array.from(item.querySelectorAll('a.na_ccw')).map(a => a.getAttribute('href')).join(', ')
+                        }
+                    } else if (item.querySelector('#financeAnswer')) {
+                        // stonks
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'stock-chart',
+                            title: item.querySelector('.b_topTitle').innerText.trim(),
+                            description: text_from_childless_children(item)
                         }
                     } else if (item.matches('.b_ans') && item.querySelector('#placeAnswer')) {
                         // 'travel info', info about a geographic location
@@ -440,16 +480,30 @@ zoekplaatje.register_module(
                             real_link: '',
                         }
                     } else if (item.matches('.b_widgetContainer')) {
-                        // Left sidebar sliding in widget
+                        // Left sidebar index widget, which slides in
+                        // Sometimes it's hidden, if so we skip!
+                        if (item)
                         parsed_item = {
                             ...parsed_item,
-                            type: 'left-sidebar-widget',
+                            type: 'index-widget',
                             title: safe_prop(item.querySelector('h2'), 'innerText'),
                             description: Array.from(item.querySelectorAll('button, .rel_ent_t')).map(div => div.innerText.trim()).join(', '),
                             link: '',
                             real_link: '',
                         }
+                    } else {
+                    // unrecognised result type
+                    // consider logging and fixing...!
+                    console.log('unknown', item)
+                    parsed_item = {
+                        ...parsed_item,
+                        description: text_from_childless_children(item)
                     }
+                    if (!has_content(item)) {
+                        console.log('empty item, skipping for now');
+                        continue;
+                    }
+                }
 
                     /* DETERMINE SECTION */
                     // Left slide-in section
