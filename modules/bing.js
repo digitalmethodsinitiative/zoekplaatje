@@ -88,7 +88,7 @@ zoekplaatje.register_module(
         const parser = new DOMParser();
         let resultpage;
         let selectors = {
-            results: '#b_results > li, #b_topw > li, #b_pole .b_poleContent, #b_pole .sva_pole, #b_context > li:not(:has(.lite-entcard-blk)), #b_context .lite-entcard-blk, .b_top .b_widgetContainer',
+            results: '#b_results > li, #b_pole .b_poleContent, #b_pole .sva_pole, .b_wpt_bl, #b_context > li:not(:has(.lite-entcard-blk)), #b_context .lite-entcard-blk',
             title: 'h2',
             link: 'h2 a',
             link_real: 'cite',
@@ -117,6 +117,8 @@ zoekplaatje.register_module(
                         || item.matches('.b_adBottom')
                     ) {
                         // not results
+                        console.log("Skipping hidden element:")
+                        console.log(item)
                         continue;
                     }
                     let parsed_item = {
@@ -193,6 +195,15 @@ zoekplaatje.register_module(
                             link: item.querySelector(selectors.link).getAttribute('href'),
                             real_link: item.querySelector(selectors.link).getAttribute('href')
                         }
+                    } else if (item.matches('.b_dictans')) {
+                        // dictionary answer
+                        // todo: check if this doesn't overwrite related searches
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'dictionary-widget',
+                            title: item.querySelector('.header_pron').innerText,
+                            description: Array.from(item.querySelectorAll('.dc_pd')).map(div => div.innerText).join(' '),
+                        }
                     } else if (item.matches('.b_ans.b_mop') && item.querySelector('.df_alaskcarousel')) {
                         parsed_item = {
                             ...parsed_item,
@@ -200,13 +211,6 @@ zoekplaatje.register_module(
                             title: item.querySelector('.b_primtxt').innerText,
                             description: Array.from(item.querySelectorAll('.df_qntext')).map(question => question.innerText).join(', '),
 
-                        }
-                    } else if (item.matches('.b_dictans')) {
-                        parsed_item = {
-                            ...parsed_item,
-                            type: 'related-questions',
-                            title: item.querySelector('.dc_wt').innerText,
-                            description: Array.from(item.querySelectorAll('.dc_bld')).map(question => question.innerText).join(' '),
                         }
                     } else if (item.matches('.b_ans') && item.querySelector('.b_rs')) {
                         // Related searches
@@ -216,6 +220,14 @@ zoekplaatje.register_module(
                             title: item.querySelector('h2').innerText,
                             description: Array.from(item.querySelectorAll('.b_suggestionText')).map(question => question.innerText).join(', '),
 
+                        }
+                    } else if (item.querySelector('.richrswrapper')) {
+                        // Related searches, but in the side bar--slightly differently formatted
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'related-queries',
+                            title: item.querySelector('h2').innerText.trim(),
+                            description: Array.from(item.querySelectorAll('.richrsrailsuggestion')).map(div => div.innerText.trim()).join(', ')
                         }
                     } else if (item.matches('.b_ans') && item.querySelector('.b_rrsr')) {
                         // Related searches in the sidebar
@@ -346,18 +358,55 @@ zoekplaatje.register_module(
                             title: safe_prop(item.querySelector('h2'), 'innerText'),
                             description: Array.from(item.querySelectorAll('.b_suggestionText')).map(div => div.innerText.trim()).join(', ')
                         }
-                    } else if (item.querySelector('#b_wpt_container')) {
-                        // Huge expanded widget with headers from a page in different cards.
-                        // May also show information like images and videos.
-                        const titles = Array.from(item.querySelectorAll('h2, .b_rc_gb_sub_title')).map(h => safe_prop(h, 'innerText').trim()).join(', ');
-                        const descriptions = Array.from(item.querySelectorAll('.b_paractl')).map(h => safe_prop(h, 'innerText').trim()).join(', ');
+                    } else if (item.matches('.b_wpt_bl')) {
+                        // cards in huge expanded widget on top.
+                        // we consider these cards as different widgets, like we do for Google.
+                        // can include images and videos.
+                        let title = '';
+                        let description = '';
+                        let link = '';
+                        let real_link = '';
+
+                        let subtype = '';
+
+                        if (item.querySelector('.b_gwaDlWrapper')) {
+                            // main featured result
+                            subtype = '-top-result';
+                            title = item.querySelector('.b_gwaTitle').innerText.trim();
+                            link = item.querySelector('.b_gwaSiteUrl').innerText.trim();
+                        } else if (item.querySelector('.b_wpt_bl_bord')) {
+                            // ibid
+                            subtype = '-top-result';
+                            title = item.querySelector('h2 > a').innerText.trim();
+                            description = item.querySelector('.b_paractl').innerText.trim();
+                            real_link = item.querySelector('.cite').innerText.trim();
+                        } else if (item.querySelector('.b_rc_gb_sub_image')) {
+                            // one image card
+                            subtype = '-image'
+                        } else if (item.querySelector('.cliphero')) {
+                            // multiple images
+                            subtype = '-images';
+                        } else if (item.querySelector('a.mc_vtvc_link')) {
+                            // video
+                            subtype = '-video';
+                            title = item.querySelector('.mc_vtvc_title').innerText.trim();
+                            link = item.querySelector('a.mc_vtvc_link').getAttribute('href');
+                        } else if (item.querySelector('.l_ecrd_stacked')) {
+                            // card subdivided with categories
+                            subtype = '-categories'
+                        }
+
+                        if (!description.length > 0) {
+                            description = text_from_childless_children(item).replace(title, '')
+                        }
+
                         parsed_item = {
                             ...parsed_item,
-                            type: 'top-info-widget',
-                            title: titles,
-                            description: descriptions,
-                            link: safe_prop(item.querySelector('h2 a'), 'attr:href'),
-                            real_link: safe_prop(item.querySelector('cite'), 'innerText')
+                            type: 'info-card' + subtype,
+                            title: title,
+                            description: description,
+                            link: link,
+                            real_link: real_link
                         }
                     } else if (item.querySelector('div[data-key=GenericMicroAnswer]')) {
                         // generic widget, e.g. for lyrics
@@ -371,6 +420,7 @@ zoekplaatje.register_module(
                         }
                     } else if (item.matches('.b_canvas') && item.querySelector(':scope > a') && item.querySelectorAll(':scope > *').length === 1) {
                         // 'some results witheld' message
+                        console.log('Skipping "some results withheld" message')
                         continue;
                     } else if (item.querySelector('.d_ans .b_vPanel .b_dList')) {
                         parsed_item = {
@@ -440,26 +490,40 @@ zoekplaatje.register_module(
                         item_id = item_id[item_id.length - 1];
                         // Skip irrelevant or empty sections
                         if (item_id === "Footer") {
+                            console.log("Skipping Footer element")
+                            console.log(item)
                             continue;
                         }
                         else if (item_id === "PlainHero" && (!item.querySelector('.b_snippet, .spl_logoheader'))) {
+                            console.log("Skipping header element")
+                            console.log(item)
                             continue
                         }
                         // to kebab-case
                         item_type = item_id.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
                         if (!item_type) {
                             item_type = 'unknown'
-                        } else if (item_type === 'plain_hero') {
-                            item_type = 'explanation-box'
+                        } else if (item_type === 'plain-hero') {
+                            item_type = 'wiki'
+                        }
+                        else if (item_type === 'qn-a') {
+                            item_type = 'quote'
                         }
                         else if (item_type.includes('fact')) {
-                            item_type = 'fact-box'
+                            item_type = 'fact'
                         }
 
-                        const title = safe_prop(item.querySelector('h2, h3, .l_ecrd_bt_rings_ttl, .l_ecrd_txt_pln'), 'innerText');
+                        const title = safe_prop(item.querySelector('h2, h3, .l_ecrd_txt_heros, .l_ecrd_bt_rings_ttl'), 'innerText');
                         // Flexibly get the text content of the knowledge graph components, since these differ quite a
                         // bit. Remove the first occurrence of the title, so we don't include it.
-                        const description = text_from_childless_children(item).replace(title, '');
+                        let description = ''
+                        if (item.querySelector('.l_ecrd_hov_hitbox')) {
+                            // Sometimes there's a bunch of hidden text; in this case we only extract the visible quote
+                            description = item.querySelector('.l_ecrd_hov_hitbox').innerText.trim();
+                        }
+                        else {
+                            description = text_from_childless_children(item).replace(title, '');
+                        }
 
                         parsed_item = {
                             ...parsed_item,
@@ -482,28 +546,31 @@ zoekplaatje.register_module(
                     } else if (item.matches('.b_widgetContainer')) {
                         // Left sidebar index widget, which slides in
                         // Sometimes it's hidden, if so we skip!
-                        if (item)
+                        if (style.visibility==='hidden') {
+                            console.log('Skipping hidden slide-in widget')
+                            continue
+                        }
                         parsed_item = {
                             ...parsed_item,
                             type: 'index-widget',
                             title: safe_prop(item.querySelector('h2'), 'innerText'),
                             description: Array.from(item.querySelectorAll('button, .rel_ent_t')).map(div => div.innerText.trim()).join(', '),
                             link: '',
-                            real_link: '',
+                            real_link: ''
                         }
                     } else {
-                    // unrecognised result type
-                    // consider logging and fixing...!
-                    console.log('unknown', item)
-                    parsed_item = {
-                        ...parsed_item,
-                        description: text_from_childless_children(item)
+                        // unrecognised result type
+                        // consider logging and fixing...!
+                        console.log('unknown', item)
+                        parsed_item = {
+                            ...parsed_item,
+                            description: text_from_childless_children(item)
+                        }
+                        if (!has_content(item)) {
+                            console.log('empty item, skipping for now');
+                            continue;
+                        }
                     }
-                    if (!has_content(item)) {
-                        console.log('empty item, skipping for now');
-                        continue;
-                    }
-                }
 
                     /* DETERMINE SECTION */
                     // Left slide-in section
