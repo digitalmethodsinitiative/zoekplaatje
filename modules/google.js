@@ -28,6 +28,8 @@ zoekplaatje.register_module(
         // given class is e.g. specific to wikipedia widgets, or a general class
         // that (for example) designates 'box with an icon'
         // so, tl;dr, minimise using obfuscated class names
+        // todo: class names are more stable than thought, and selectors between e.g. titles and descriptions
+        //  overlap too much to make a difference, so re-evaluate if we need this...
         let selectors = {
             title: 'h3',
             link: 'span > a',
@@ -117,20 +119,31 @@ zoekplaatje.register_module(
 
         // 'did you mean' search correction; always on top
         item_selectors.push('#fprs');
+        // 'app bar' cards on top
+        item_selectors.push('#appbar g-scrolling-carousel')
 
-        // first figure out how to get the search results
+        // first figure out how to get the main search results
         // this changes unfortunately, so not trivial
         if (from_page) {
             // Different types of main search results:
             //  1: A result list with a specific div for the first result and the other results nested afterwards.
-            //  2: Results as divs under #kp-wp-tab-overview
+            //  2: Results as divs under #kp-wp-tab-overview; this may get moved around
             //  3: An old-school general result list with divs right under #rso
-            if (resultpage.querySelector('#center_col #rso > div:not([class])')){
+            if (resultpage.querySelector('#center_col #rso > div:not([class])')) {
                 item_selectors.push('#center_col #rso > div.hlcw0c') // first result
                 item_selectors.push('#center_col #rso > div:not([class]) > div'); // other results
-            } else if (resultpage.querySelector('#search #rso .kp-wholepage #kp-wp-tab-cont-overview')) {
-                item_selectors.push('#rso #kp-wp-tab-overview > div');
-            } else {
+            } else if (resultpage.querySelector('#rso wholepage-tab-history-helper')) {
+                // to make matters worse, google sometimes groups organic results between widgets in single divs.
+                // here we check whether this is the case by seeing if the #kp-wp-tab-cont-overview has the role of
+                // 'tabpanel' and selecting widgets and the organic results (.g divs) individually.
+                if (resultpage.querySelector('#kp-wp-tab-cont-overview[role=tabpanel]')) {
+                    item_selectors.push('#rso #kp-wp-tab-overview > div:not(:has(.g)), #rso #kp-wp-tab-overview > div:has(.g) > .g');
+                } else {
+                    // Else we just trust that every div under #kp-wp-tab-overview is a separate result!
+                    item_selectors.push('#rso #kp-wp-tab-overview > div');
+                }
+            } else if (resultpage.querySelectorAll('#rso > div').length > 1) {
+                // multiple results under #rso, else we'll fetch the results with the kp-wp-tab selectors
                 item_selectors.push('#center_col #rso > div')
             }
         } else {
@@ -140,19 +153,20 @@ zoekplaatje.register_module(
         if (resultpage.querySelector('wholepage-tab-history-helper, .kp-wholepage-osrp')) {
             // the page has 'tabs', which may refer to the main results and the knowledge graph.
             // sometimes results are nested, sometimes not...
-            // #kp-wp-tab-overview can also be the knowledge graph, to make it even more complicated...
-            if (resultpage.querySelector('#kp-wp-tab-overview > div.HaEtFf')) {
+            // #kp-wp-tab-overview can also be the knowledge graph, to make it even more complicated;
+            // knowledge graph and main results often in the same #rso div in the request, and are
+            // then splitted in the final HTML.
+            if (resultpage.querySelector('#rso #kp-wp-tab-overview > div.HaEtFf')) {
                 item_selectors.push('#kp-wp-tab-overview > div:not(.HaEtFf), #kp-wp-tab-overview > div.HaEtFf > div');
-
                 // related searches are sometimes within the main tab section, sometimes not
                 // if not, use css selectors directly.
                 if(resultpage.querySelectorAll('.oIk2Cb').length === 1) {
                     // can be both lists and carousels
-                    item_selectors.push('.oIk2Cb > .FalWJb, .oIk2Cb > .y6Uyqe');
+                    item_selectors.push('.oIk2Cb > .FalWJb, #rso .oIk2Cb > .y6Uyqe');
                 }
             }
-            else {
-                item_selectors.push('#kp-wp-tab-overview > div');
+            else if (!item_selectors.includes('#rso #kp-wp-tab-overview > div')) {
+                item_selectors.push('#rso #kp-wp-tab-overview > div');
             }
         }
 
@@ -164,45 +178,44 @@ zoekplaatje.register_module(
         item_selectors.push('.kp-wholepage-osrp .HdbW6');
 
         // big info box on top of the page
-        // consider different cards as different items
+        // we consider different cards as different items
         if (resultpage.querySelectorAll('.M8OgIe').length === 1) {
             item_selectors.push('.WJXODe > div, .e6hL7d > div');
         }
 
-        // big info panel; seems to be captured by selectors above already
-        //item_selectors.push(':not(#center_col) span[role=tab][data-ti=overview]');
-
         // ads are elsewhere in the hierarchy and, for a change, conveniently labeled
         item_selectors.push('div[aria-label=Ads] > div');
         item_selectors.push('#atvcap > div');
+        item_selectors.push('#tads div[data-ta-slot]')  // big sponsored first result
+        item_selectors.push('.cu-container')            // product cards in knowledge graph
 
         // there are also 'featured snippets' which are outside of the usual hierarchy
         if(resultpage.querySelector("a[href*='featured_snippets']") && resultpage.querySelector("a[href*='featured_snippets']").getAttribute('href').indexOf('support.google') > 0) {
             item_selectors.push('#Odp5De');
         }
 
-        // AI answer (todo: contents aren't fetched because they're loaded in later)
+        // AI answer (todo: contents aren't fetched because they're loaded in later, would be nice to add)
         item_selectors.push('#eKIzJc')
 
         // bottom page stuff that's sometimes not in the main tab
         item_selectors.push('#bres')
 
         // Knowledge graph widgets on the right sidebar
-        // #rso is the search results, #rhs is the knowledge graph.
-        // Some empty/irrelevant divs don't have class names, so only include those that do.
+        // #rso denotes the main search results, #rhs is the knowledge graph.
+        // These are changed in the HTML after, which is a bit confusing.
         if (resultpage.querySelector('#rhs #kp-wp-tab-cont-overview')) {
-            // Knowledge graph subject header
+            // Knowledge graph subject header; slightly different position
             item_selectors.push('#rhs #kp-wp-tab-cont-overview .KsRP6')
             // Different knowledge graph boxes like wikipedia info and images
+            // may already be recognised by the #kp-wp-tab selector above
             item_selectors.push('#rhs #kp-wp-tab-overview > div')
         }
         else {
             item_selectors.push('#rhs > div[id], #rhs > block-component');
-            // Sometimes we explicitly need to set knowledge graph elements
-            // I guess the DOM is transformed with JS after page load?
-            item_selectors.push('#rhs .kno-rdesc')
         }
-        const results_selector = item_selectors.join(', ');console.log(results_selector)
+        const results_selector = item_selectors.join(', ');
+        console.log("Selecting items with the following CSS selectors:")
+        console.log(results_selector);
 
         // go through results in DOM, using the selectors defined above...
         let result_items = resultpage.querySelectorAll(results_selector);
@@ -234,6 +247,15 @@ zoekplaatje.register_module(
                     link: ''
                 };
 
+
+                // todo: for some reason, the whole #rhs knowledge graph side bar gets selected sometimes, probably
+                //  because it gets loaded in as a 'correct' subelement and then moved around later depending on
+                //  the viewport? Hard-code a skip for now!
+                if (item.matches("#rhs")) {
+                    console.log('Skipping #rhs div')
+                    continue
+                }
+
                 if (item.matches('#fprs') || (item.matches('#taw') && item.querySelector('omnient-visibility-control'))) {
                     // 'did you mean' suggestion box
                     let title = ''
@@ -246,6 +268,13 @@ zoekplaatje.register_module(
                         ...parsed_item,
                         type: 'did-you-mean',
                         title: title
+                    }
+                } else if (item.matches('g-scrolling-carousel') && closest_parent(item, '#appbar')) {
+                    // suggested topic/search card on top of the page
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'suggested-topic-card',
+                        description: text_from_childless_children(item)
                     }
                 } else if (item.matches('#eKIzJc')) {
                     // AI answer box. Should be loaded!
@@ -281,8 +310,16 @@ zoekplaatje.register_module(
                         title: item.querySelector('.xrk1Nb').innerText.trim(),
                         description: item.querySelector('.JKH4td').innerText.trim(),
                     }
+                } else if (item.querySelector('#bfsrp')) {
+                    // big info panel with a table of information (e.g. 'tips' on how to grow your hair)
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'big-info-panel',
+                        title: item.querySelector('h2 > div:not(class)').innerText + ' ' + item.querySelector('h2 > div[class]').innerText,
+                        description: Array.from(item.querySelectorAll('div[data-entityid]')).map(div => div.innerText.trim()).join(', ')
+                    }
                 } else if (item.matches('.CYJS5e') || item.matches('.QejDDf')) {
-                    // widget info box at top of page
+                    // info cards at top of page
                     let subtype = '';
                     if (item.querySelector('ol')) {
                         // big image carousel
@@ -302,18 +339,6 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
                         link: safe_prop(item.querySelector('a'), 'attr:href')
                     }
-                } else if (item.matches('span[role=tab]')) {
-                    // big info widget thing
-                    const widget_parent = closest_parent(item, '.XqFnDf');
-                    if (widget_parent) {
-                        parsed_item = {
-                            ...parsed_item,
-                            type: 'big-overview-widget',
-                            title: widget_parent.querySelector('div[role=heading]').innerText,
-                            link: '',
-                            description: Array.from(widget_parent.querySelectorAll('span[role=tab]')).map(h => h.innerText).join(', ')
-                        }
-                    }
                 } else if (item.matches('#Odp5De')) {
                     // 'featured snippet' banner
                     parsed_item = {
@@ -323,8 +348,9 @@ zoekplaatje.register_module(
                         link: safe_prop(item.querySelector('span[href]'), 'attr:href'),
                         description: safe_prop(item.querySelector("div[data-attrid='wa:/description']"), 'innerText')
                     }
-                } else if (item.parentNode.matches('div[aria-label=Ads]') || item.querySelector('#tvcap') || item.matches('#tvcap') || item.parentNode.matches('#atvcap') || item.matches('#rhsads')) {
+                } else if (item.parentNode.matches('div[aria-label=Ads]') || item.querySelector('#tvcap') || item.matches('#tvcap') || item.parentNode.matches('#atvcap') || item.matches('#rhsads') || item.matches('div[data-ta-slot]') || item.matches('.cu-container')) {
                     // ads! for a change, these are marked quite clearly
+                    // todo: make different ad types extract titles, descriptions, and links correctly
                     const type = item.querySelector('g-scrolling-carousel') ? 'advertisement-widget' : 'advertisement';
                     let title = safe_prop(item.querySelectorAll('a div[style*=color]'), 'innerText');
                     if (!title) {
@@ -440,23 +466,14 @@ zoekplaatje.register_module(
                         description: Array.from(item.querySelectorAll('.related-question-pair')).map(question => question.getAttribute('data-q')).join(', '),
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
                     }
-                } else if (item.querySelector('.ZsAbe') || (item.querySelector('wp-grid-view') && item.querySelector('.a-no-hover-decoration') && item.querySelector('.ZVHLgc')) || item.querySelector('.VqeGe')) {
-                    // 'recommendations'
-                    // recommended places to visit (?)
-                    parsed_item = {
-                        ...parsed_item,
-                        type: 'recommended-widget',
-                        title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
-                        link: domain_prefix + safe_prop(item.querySelector("a[href^='/search']:not(.a-no-hover-decoration)"), 'attr:href'),
-                        description: Array.from(item.querySelectorAll('a.a-no-hover-decoration')).map(a => a.getAttribute('title')).join(', ')
-                    }
-                } else if (item.querySelector('div.g') && item.querySelector(selectors.description)) {
+                } else if ((item.querySelector('div.g') || item.matches('div.g')) && item.querySelector(selectors.description)) {
                     if (item.querySelector('div[role=complementary]')) {
                         // embedded sidebar item???
                         item.querySelector('div[role=complementary]').remove();
                     }
                     // an actual, organic result!
-                    // can either be a simple result or one with some extra stuff, e.g. site links
+                    // can either be a simple result or one with some extra stuff, e.g. site links.
+                    // it may or may also be wrapped in a div with g divs
                     parsed_item['type'] = item.querySelector('g-img') ? 'organic-showcase' : 'organic';
                     if (item.querySelector('div[data-attrid*=description]') && item.querySelector('.xpdopen')) {
                         parsed_item['type'] = 'organic-summary';
@@ -479,14 +496,15 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('a[role=link]'), 'innerText'),
                         description: Array.from(item.querySelectorAll('div[role=heading]')).map(div => div.innerText.trim()).filter(div => div).join(', ')
                     }
-                } else if ((item.querySelector('.gsrt.wp-ms') && item.querySelector('img[data-deferred]') && item.querySelector('div > span > svg[focusable=false]') && item.querySelector('div > a[tabindex="0"]')) && (!item.matches("#rhs") && !closest_parent(item, '#rhs'))) {
-                    // places to visit widget...
-                    parsed_item = {
-                        ...parsed_item,
-                        type: 'recommended-places-widget',
-                        title: safe_prop(item.querySelector('div[aria-level="2"][role=heading]'), 'innerText'),
-                        description: Array.from(item.querySelectorAll('div[role=heading][aria-level="2"]')).map(div => div.innerText.trim()).filter(div => div).join(', ')
-                    }
+                // should already be caught by card-list-widget below
+                // } else if ((item.querySelector('.gsrt.wp-ms') && item.querySelector('img[data-deferred]') && item.querySelector('div > span > svg[focusable=false]') && item.querySelector('div > a[tabindex="0"]')) && (!item.matches("#rhs") && !closest_parent(item, '#rhs'))) {
+                //     // widget with a list of recommendations, e.g. places to visit or songs by an artist
+                //     parsed_item = {
+                //         ...parsed_item,
+                //         type: 'recommended-widget',
+                //         title: safe_prop(item.querySelector('div[aria-level="2"][role=heading]'), 'innerText'),
+                //         description: Array.from(item.querySelectorAll('div[role=heading][aria-level="2"]')).map(div => div.innerText.trim()).filter(div => div).join(', ')
+                //     }
                 } else if(item.querySelector('div[data-item-card][data-attrid*=movies]')) {
                     // movies widget
                     parsed_item = {
@@ -518,6 +536,13 @@ zoekplaatje.register_module(
                         type: 'stock-chart',
                         description: Array.from(item.querySelectorAll('g-card-section[class] > div')).map(div => div.innerText.trim()).join(', ')
                     }
+                } else if (item.querySelector('div[data-attrid="kc:/business/issuer:stock quote]"')) {
+                    // Small stock widget
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'stock-widget',
+                        description: text_from_childless_children(item)
+                    }
                 } else if (item.matches('.xpdbox')) {
                     // dictionary widget
                     parsed_item = {
@@ -539,13 +564,105 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('a[role=link]'), 'innerText'),
                         description: Array.from(item.querySelectorAll('div.title')).map(div => div.parentNode.innerText.trim()).filter(div => div).join(', ')
                     }
+                } else if (item.querySelector('a[data-ti*=lyrics]')) {
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'lyrics-widget',
+                        title: safe_prop(item.querySelector('a[role=link]'), 'innerText'),
+                        description: Array.from(item.querySelectorAll('div[jsname] > span')).map(div => div.innerText.trim()).filter(div => div).join(', ')
+                    }
+                } else if (item.querySelector('div[data-viewer-entrypoint]') && item.querySelector('#iur')) {
+                    // image carousel
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'big-image-carousel',
+                        title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
+                    }
+                } else if (item.querySelector('.osrp-blk') || item.querySelector('div.kno-rdesc')
+                || item.matches('div.kno-rdesc') || item.querySelector('div[data-attrid=VisualDigestDescription]')) {
+                    // wiki knowledge graph on the right
+                    // sometimes directly selected with div.kno-rdesc, sometimes not.
+                    // Can also be in text form or as a 'card'.
+                    let title = ''
+                    let description = ''
+                    // sometimes has a title, sometimes not
+                    if (item.querySelector('div[data-attrid=title]')) {
+                        title = item.querySelector('div[data-attrid=title]').innerText;
+                    }
+                    if (item.matches('div.kno-rdesc')) {
+                        description = text_from_childless_children(item)
+                    } else if (item.querySelector('div[data-attrid=VisualDigestDescription]')) {
+                        description = Array.from(item.querySelectorAll('span[data-dtx] > span')).map(span => span.innerText.trim()).join('\n')
+                    } else {
+                        description = text_from_childless_children(item.querySelector('div.kno-rdesc'))
+                    }
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'wiki-widget',
+                        title: title,
+                        description: description
+                    }
+                } else if (item.querySelector('div[data-attrid=ShoppingMerchantFulfillmentSignals]')) {
+                    // Shipping widget
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'shipping-widget',
+                        title: '',
+                        description: text_from_childless_children(item)
+                    }
+                } else if (item.querySelector('block-component') && closest_parent(item, '#rhs')) {
+                    // Semantic box with 'results for'; same as 'organic showcase'
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'organic-showcase',
+                        title: item.querySelector('h2[data-attrid=title]').innerText.trim(),
+                        description: item.querySelector('div[lang][data-md]').innerText.trim(),
+                    }
+                } else if (item.querySelector('#media_result_group.kno-mrg.kno-swp')) {
+                    // images widget in knowledge graph
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'images-widget'
+                    }
+                } else if (item.querySelector("div[data-attrid*='kc:/']")) {
+                    // generic semantic web widget
+                    // use semantic reference type as widget type
+                    // can also appear in knowledge graph!
+                    const type = item.querySelector("div[data-attrid*='kc:/']").getAttribute('data-attrid').split(':')[1].replace(/\//g, '-').substring(1) + '-widget';
+                    let title = ''
+                    let description = ''
+
+                    // Semantic widgets can be in the right-hand knowledge graph as well.
+                    // these are parsed slightly differently.
+                    if (closest_parent(item, '#rhs')) {
+                        title = Array.from(item.querySelectorAll('div[role=heading]')).map(div => div.innerText.trim()).filter(div => div).join(', ');
+                        // Image list / carousel
+                        if (item.querySelector('div[role=list] > div > div[role=listitem]')) {
+                            description = Array.from(item.querySelectorAll('div[aria-level="3"][role=heading]')).map(div => div.innerText.trim()).join(', ')
+                        } else {
+                            // Else just try to get the text of chlidless children
+                            description = text_from_childless_children(item).replace(title, '').trim();
+                        }
+                    } else {
+                        title = safe_prop(item.querySelector('a[role=link]'), 'innerText')
+                        description = Array.from(item.querySelectorAll('div[role=heading]')).map(div => div.innerText.trim()).filter(div => div).join(', ')
+                    }
+                    if (description.length === 0) {
+                        description = text_from_childless_children(item)
+                    }
+
+                    parsed_item = {
+                        ...parsed_item,
+                        type: type,
+                        title: title,
+                        description: description
+                    }
                 } else if (item.querySelector('.oIk2Cb')) {
                     // alas, class names
                     // related searches at the bottom
                     // related searches can be in a list or in a carousel
                     // get description for both
                     let description = Array.from(item.querySelectorAll('div')).filter(div => !div.querySelector('span, div')).map(div => div.innerText.trim()).filter(div => div.length)
-
                     if (item.querySelector('.b2Rnsc')) {
                         const list_texts = Array.from(item.querySelectorAll('.b2Rnsc')).map(div => div.innerText.trim())
                         description = description.concat(list_texts)
@@ -557,47 +674,6 @@ zoekplaatje.register_module(
                         type: 'related-queries-widget',
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
                         description: description
-                    }
-                } else if (item.querySelector('a[data-ti*=lyrics]')) {
-                    parsed_item = {
-                        ...parsed_item,
-                        type: 'lyrics-widget',
-                        title: safe_prop(item.querySelector('a[role=link]'), 'innerText'),
-                        description: Array.from(item.querySelectorAll('div[jsname] > span')).map(div => div.innerText.trim()).filter(div => div).join(', ')
-                    }
-                } else if (item.querySelector("div[data-attrid*='kc:/']")) {
-                    // generic semantic web widget
-                    // use semantic reference type as widget type
-                    const type = item.querySelector("div[data-attrid*='kc:/']").getAttribute('data-attrid').split(':')[1].replace(/\//g, '-').substring(1) + '-widget';
-
-                    // test if actually in result list
-                    let attr_div = item.querySelector("div[data-attrid*='kc:/']");
-                    let is_complementary = false;
-                    while (attr_div) {
-                        if (attr_div.parentElement && attr_div.parentElement.matches('*[role=complementary]')) {
-                            is_complementary = true;
-                            break;
-                        }
-                        attr_div = attr_div.parentElement;
-                    }
-
-                    if (is_complementary) {
-                        // breakout panel to the side, ignore
-                        continue;
-                    }
-
-                    parsed_item = {
-                        ...parsed_item,
-                        type: type,
-                        title: safe_prop(item.querySelector('a[role=link]'), 'innerText'),
-                        description: Array.from(item.querySelectorAll('div[role=heading]')).map(div => div.innerText.trim()).filter(div => div).join(', ')
-                    }
-                } else if (item.querySelector('div[data-viewer-entrypoint]') && item.querySelector('#iur')) {
-                    // image carousel
-                    parsed_item = {
-                        ...parsed_item,
-                        type: 'big-image-carousel',
-                        title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
                     }
                 } else if (item.matches('.FalWJb') || item.querySelector('div[role=list] > div > div[role=listitem] div[aria-level="3"][role=heading]')) {
                     // carousel of related searches above regular list
@@ -614,78 +690,14 @@ zoekplaatje.register_module(
                         title: title,
                         description: related_searches
                     }
-                } else if (item.matches('.oIk2Cb')) {
-                    // skip related search wrapper
-                    continue
-                } else if (item.querySelector('.osrp-blk') || item.querySelector('div.kno-rdesc')
-                || item.matches('div.kno-rdesc')) {
-                    // wiki knowledge graph on the right
-                    // sometimes directly selected with div.kno-rdesc, sometimes not
-                    let title = ''
-                    let description = ''
-                    // sometimes has a title, sometimes not
-                    if (item.querySelector('div[data-attrid=title]')) {
-                        title = item.querySelector('div[data-attrid=title]').innerText;
-                    }
-                    if (item.matches('div.kno-rdesc')) {
-                        description = text_from_childless_children(item)
-                    } else {
-                        description = text_from_childless_children(item.querySelector('div.kno-rdesc'))
-                    }
+                } else if (item.querySelector('g-inner-card') || item.querySelector('.ZsAbe') || (item.querySelector('wp-grid-view') && item.querySelector('.a-no-hover-decoration') && item.querySelector('.ZVHLgc')) || item.querySelector('.VqeGe') || (item.querySelector('.gsrt.wp-ms') && item.querySelector('img[data-deferred]') && item.querySelector('div > span > svg[focusable=false]') && item.querySelector('div > a[tabindex="0"]'))) {
+                    // generic list of cards, can be many different things
                     parsed_item = {
                         ...parsed_item,
-                        type: 'wiki-widget',
-                        title: title,
-                        description: description
-                    }
-                } else if (item.querySelector('block-component') && closest_parent(item, '#rhs')) {
-                    // Semantic box with 'results for'; same as 'organic showcase'
-                    parsed_item = {
-                        ...parsed_item,
-                        type: 'organic-showcase',
-                        title: item.querySelector('h2[data-attrid=title]').innerText.trim(),
-                        description: item.querySelector('div[lang][data-md]').innerText.trim(),
-                    }
-                } else if (item.querySelector("div[data-attrid*='kc:/']")) {
-                    // generic semantic web widget.
-                    // use semantic reference type as widget type.
-                    // These can also appear in the Knowledge graph.
-                    const type = item.querySelector("div[data-attrid*='kc:/']").getAttribute('data-attrid').split(':')[1].replace(/\//g, '-').substring(1) + '-widget';
-                    let title = ''
-                    let description = ''
-
-                    // Semantic widgets can be in the right-hand knowledge graph as well.
-                    // these are parsed slightly differently.
-                    if (closest_parent(item, '#rhs')) {
-                        title = Array.from(item.querySelectorAll('div[role=heading]')).map(div => div.innerText.trim()).filter(div => div).join(', ');
-
-                        // Image list / carousel
-                        if (item.querySelector('div[role=list] > div > div[role=listitem]')) {
-                            description = Array.from(item.querySelectorAll('div[aria-level="3"][role=heading]')).map(div => div.innerText.trim()).join(', ')
-                        }
-                        // Else just try to get the text of chlidless children
-                        else {
-                            description = text_from_childless_children(item).replace(title, '').trim();
-                        }
-                    }
-                    else {
-                        title = safe_prop(item.querySelector('a[role=link]'), 'innerText')
-                        description = Array.from(item.querySelectorAll('div[role=heading]')).map(div => div.innerText.trim()).filter(div => div).join(', ')
-                    }
-                    if (description.length === 0) {
-                        description = text_from_childless_children(item)
-                    }
-                    parsed_item = {
-                        ...parsed_item,
-                        type: type,
-                        title: title,
-                        description: description
-                    }
-                } else if (item.querySelector('#media_result_group.kno-mrg.kno-swp')) {
-                    // images widget in knowledge graph
-                    parsed_item = {
-                        ...parsed_item,
-                        type: 'images-widget'
+                        type: 'card-list-widget',
+                        title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
+                        link: domain_prefix + safe_prop(item.querySelector("a[href^='/search']:not(.a-no-hover-decoration)"), 'attr:href'),
+                        description: Array.from(item.querySelectorAll('a.a-no-hover-decoration')).map(a => a.getAttribute('title')).join(', ')
                     }
                 } else {
                     // unrecognised result type
