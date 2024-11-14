@@ -460,13 +460,13 @@ zoekplaatje.register_module(
                             description: '',
                         }
                     } else if (item.querySelector('#d_ans')) {
-                        // LLM answer
+                        // Featured answer extracted from a result page
                         parsed_item = {
                             ...parsed_item,
-                            type: 'llm-answer',
-                            title: '',
+                            type: 'organic-answer',
+                            title: safe_prop(item.querySelector('.df_da'), 'innerText'),
                             link: Array.from(item.querySelectorAll('.site span')).map(el => safe_prop(el, 'title').trim()).join(', '),
-                            real_link: '',
+                            real_link: safe_prop(item.querySelector('cite'), 'innerText'),
                             description: safe_prop(item.querySelector('.df_con'), 'innerText'),
                         }
                     } else if (item.querySelector('.b_vPanel')) {
