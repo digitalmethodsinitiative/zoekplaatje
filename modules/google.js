@@ -551,11 +551,19 @@ zoekplaatje.register_module(
                         type: 'stock-widget',
                         description: text_from_childless_children(item)
                     }
+                } else if (item.querySelector('#tw-ob') || item.querySelector('#tw-gtlink')) {
+                    // Translate widget
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'translate-widget',
+                        title: '',
+                        description: text_from_childless_children(item)
+                    }
                 } else if (item.matches('.xpdbox')) {
                     // dictionary widget
                     parsed_item = {
                         ...parsed_item,
-                        type: 'dictionary-widget',
+                        type: 'translate-widget',
                         title: safe_prop(item.querySelector('.data-attrid[EntryHeader]'), 'innerText'),
                         description: text_from_childless_children(item.querySelector('.lr_container > div[jsslot]'), 'innerText'),
                     }
