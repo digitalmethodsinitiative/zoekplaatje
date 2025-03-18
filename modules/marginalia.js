@@ -9,7 +9,7 @@ zoekplaatje.register_module(
 
         // check if search results...
         let domain = source_url.split('/')[2];
-        if (source_url.indexOf('search.marginalia.nu//search?query') < 0) {
+        if (source_url.indexOf('search.marginalia.nu/search?query') < 0) {
             console.log(`bad url ${source_url}`)
             return [];
         }
@@ -26,7 +26,7 @@ zoekplaatje.register_module(
         resultpage = parser.parseFromString(response, 'text/html');
 
         // go through results in DOM, using the selectors defined above...
-        const result_items = resultpage.querySelectorAll('section#results section.search-result')
+        const result_items = resultpage.querySelectorAll('section#results section.search-result');
         if (result_items) {
             const query = decodeURI(source_url).split('search?')[1].split('query=')[1].split('&')[0].split('#')[0];
             for (const item of result_items) {

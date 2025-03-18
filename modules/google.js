@@ -115,10 +115,9 @@ zoekplaatje.register_module(
 
         let item_selectors = [];
 
-        // 'did you mean' search correction; always on top
-        item_selectors.push('#fprs');
-        // ..which can also loop like this:
-        item_selectors.push('#center_col > #taw')
+        // 'did you mean' search correction and stuff like SafeSearch; always on top
+        item_selectors.push('#oFNiHe');
+
         // 'app bar' cards on top
         item_selectors.push('#appbar g-scrolling-carousel')
 
@@ -256,7 +255,7 @@ zoekplaatje.register_module(
                     continue
                 }
 
-                if (item.matches('#fprs') || (item.matches('#taw') && item.querySelector('omnient-visibility-control'))) {
+                if (item.matches('#oFNiHe') && item.querySelector('omnient-visibility-control')) {
                     // 'did you mean' suggestion box
                     let title = ''
                     if (item.matches('#taw')) {
@@ -276,6 +275,11 @@ zoekplaatje.register_module(
                         type: 'few-matches',
                         title: '',
                         description: text_from_childless_children(item)
+                } else if (item.matches('#oFNiHe') && item.querySelector('div[data-key=filter]')) {
+                    // Safe search bar
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'safe-search'
                     }
                 } else if (item.matches('g-scrolling-carousel') && closest_parent(item, '#appbar')) {
                     // suggested topic/search card on top of the page
