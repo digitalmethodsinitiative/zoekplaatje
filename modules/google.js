@@ -275,6 +275,7 @@ zoekplaatje.register_module(
                         type: 'few-matches',
                         title: '',
                         description: text_from_childless_children(item)
+                    }
                 } else if (item.matches('#oFNiHe') && item.querySelector('div[data-key=filter]')) {
                     // Safe search bar
                     parsed_item = {
