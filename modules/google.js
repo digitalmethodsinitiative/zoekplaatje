@@ -1,7 +1,7 @@
 zoekplaatje.register_module(
     'Google',
     'google.com',
-    function (response, source_platform_url, source_url, nav_index) {
+    function (response, source_platform_url, source_url) {
         //console.log(response)
         let results = [];
         let results_sidebar = [];
@@ -15,7 +15,7 @@ zoekplaatje.register_module(
             return [];
         }
 
-        // we're gonna need these to parse the data
+        // we're going to need these to parse the data
         let path = source_url.split('/').slice(3).join('/');
         let now = moment();
         let index = 1;
@@ -75,10 +75,8 @@ zoekplaatje.register_module(
                 return false;
             } if (el.textContent.trim() !== "") {
                 return true;
-            } if (el.childNodes.length > 0) {
-                return true;
-            }
-            return false;
+            } return el.childNodes.length > 0;
+
         }
 
         function text_from_childless_children(container) {
@@ -119,6 +117,8 @@ zoekplaatje.register_module(
 
         // 'did you mean' search correction; always on top
         item_selectors.push('#fprs');
+        // ..which can also loop like this:
+        item_selectors.push('#center_col > #taw')
         // 'app bar' cards on top
         item_selectors.push('#appbar g-scrolling-carousel')
 
@@ -461,7 +461,7 @@ zoekplaatje.register_module(
                     // seems to be LLM-generated, to some extent
                     parsed_item = {
                         ...parsed_item,
-                        type: 'related-questions-widget',
+                        type: 'related-questions',
                         // use list of questions as description
                         description: Array.from(item.querySelectorAll('.related-question-pair')).map(question => question.getAttribute('data-q')).join(', '),
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
@@ -536,7 +536,7 @@ zoekplaatje.register_module(
                         type: 'stock-chart',
                         description: Array.from(item.querySelectorAll('g-card-section[class] > div')).map(div => div.innerText.trim()).join(', ')
                     }
-                } else if (item.querySelector('div[data-attrid="kc:/business/issuer:stock quote]"')) {
+                } else if (item.querySelector('div[data-attrid="kc:/business/issuer:stock quote"]')) {
                     // Small stock widget
                     parsed_item = {
                         ...parsed_item,
@@ -671,7 +671,7 @@ zoekplaatje.register_module(
 
                     parsed_item = {
                         ...parsed_item,
-                        type: 'related-queries-widget',
+                        type: 'related-queries',
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
                         description: description
                     }
