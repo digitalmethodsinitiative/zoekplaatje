@@ -95,6 +95,14 @@ zoekplaatje.register_module(
                             link: domain + safe_prop(item.querySelector('h3 a'), 'attr:href'),
                             description: Array.from(item.querySelectorAll('h4')).map(snippet => snippet.innerText).join(' '),
                         }
+                    } else if(item.querySelector('a[data-e-a=help]') && item.querySelector('a[data-e-a=help]').getAttribute('href').indexOf('sumarizace') >= 0) {
+                        // video panel
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'ai-summary',
+                            title: safe_prop(item.querySelector('h3'), 'innerText'),
+                            description: safe_prop(item.querySelector('p'), 'innerText')
+                        }
                     } else if(item.querySelector('.zboziProductList')) {
                         // shopping panel
                         parsed_item = {
@@ -102,6 +110,15 @@ zoekplaatje.register_module(
                             type: 'shopping-widget',
                             title: safe_prop(item.querySelector('h3'), 'innerText'),
                             link: safe_prop(item.querySelector('h3 a'), 'attr:href'),
+                        }
+                    } else if(item.querySelector('h1') && item.querySelector('h1').innerText.indexOf('Mohlo by') >= 0) {
+                        // there are various other sites with widgets...
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'interesting-questions-widget',
+                            title: safe_prop(item.querySelector('h1'), 'innerText'),
+                            link: '',
+                            description: Array.from(item.querySelectorAll('button')).map(snippet => snippet.innerText).join(' '),
                         }
                     } else if(item.querySelector('.PoiMap')) {
                         parsed_item = {
@@ -127,12 +144,12 @@ zoekplaatje.register_module(
                         // organic ('normal') result
                         let description = Array.from(item.querySelectorAll('span')).filter(item => {
                             return item.parentNode.tagName === 'DIV' && item.parentNode.firstChild === item
-                        });
+                        }).shift();
                         parsed_item = {...parsed_item,
                             type: (!item.querySelector('svg use') || item.querySelector('svg use').getAttribute('xlink:href').indexOf(organic_badge) >= 0) ? 'organic': 'advertisement',
                             title: safe_prop(item.querySelector('h3'), 'innerText'),
                             link: safe_prop(item.querySelector('h3 a'), 'attr:href'),
-                            description: description[0].innerText
+                            description: description ? safe_prop(description[0], 'innerText') : ''
                         }
                     } else if(item.querySelector('ul') && item.querySelector('ul li a').getAttribute('href').indexOf('http') !== 0) {
                         // related searches at the bottom
