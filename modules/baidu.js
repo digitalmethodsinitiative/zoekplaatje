@@ -65,7 +65,7 @@ zoekplaatje.register_module(
                     } else if(item.matches('[tpl=fy_sg_dictwisenew_san]')) {
                         parsed_item = {...parsed_item,
                             type: 'dictionary-help',
-                            title: item.querySelector('div[class*=label-title]').innerText,
+                            title: item.querySelector('div[class*=label-title], span.cosc-title-slot').innerText,
                             description: item.querySelector('div[class*=dict-item]').innerText.trim(),
                             link: item.querySelector('div[class*=daoliu]').querySelector('a').getAttribute('href'),
                         }
@@ -106,7 +106,7 @@ zoekplaatje.register_module(
                             link: item.querySelector(selectors.link).getAttribute('href'),
                             description: item.querySelector('div[class*=lrc-scroll]').innerText
                         }
-                    } else if (item.matches('div[tpl*=img_normal]')) {
+                    } else if (item.matches('div[tpl*=img_normal], div[tpl=image_grid_san')) {
                         // image gallery
                         parsed_item = {
                             ...parsed_item,
