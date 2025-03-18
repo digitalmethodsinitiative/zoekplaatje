@@ -1,7 +1,7 @@
 zoekplaatje.register_module(
     'Google',
     'google.com',
-    function (response, source_platform_url, source_url, nav_index) {
+    function (response, source_platform_url, source_url) {
         //console.log(response)
         let results = [];
         let results_sidebar = [];
@@ -15,7 +15,7 @@ zoekplaatje.register_module(
             return [];
         }
 
-        // we're gonna need these to parse the data
+        // we're going to need these to parse the data
         let path = source_url.split('/').slice(3).join('/');
         let now = moment();
         let index = 1;
@@ -75,10 +75,8 @@ zoekplaatje.register_module(
                 return false;
             } if (el.textContent.trim() !== "") {
                 return true;
-            } if (el.childNodes.length > 0) {
-                return true;
-            }
-            return false;
+            } return el.childNodes.length > 0;
+
         }
 
         function text_from_childless_children(container) {
@@ -250,7 +248,7 @@ zoekplaatje.register_module(
 
 
                 // todo: for some reason, the whole #rhs knowledge graph side bar gets selected sometimes, probably
-                //  because it gets loaded in as a 'correct' subelement and then moved around later depending on
+                //  because it gets loaded in as a 'correct' sub-element and then moved around later depending on
                 //  the viewport? Hard-code a skip for now!
                 if (item.matches("#rhs")) {
                     console.log('Skipping #rhs div')
@@ -269,6 +267,14 @@ zoekplaatje.register_module(
                         ...parsed_item,
                         type: 'did-you-mean',
                         title: title
+                    }
+                } else if (item.querySelector('.uzjuFc')) {
+                    // "Looks like there aren't any great matches" box
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'few-matches',
+                        title: '',
+                        description: text_from_childless_children(item)
                     }
                 } else if (item.matches('#oFNiHe') && item.querySelector('div[data-key=filter]')) {
                     // Safe search bar
@@ -468,7 +474,7 @@ zoekplaatje.register_module(
                     // seems to be LLM-generated, to some extent
                     parsed_item = {
                         ...parsed_item,
-                        type: 'related-questions-widget',
+                        type: 'related-questions',
                         // use list of questions as description
                         description: Array.from(item.querySelectorAll('.related-question-pair')).map(question => question.getAttribute('data-q')).join(', '),
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
@@ -550,11 +556,19 @@ zoekplaatje.register_module(
                         type: 'stock-widget',
                         description: text_from_childless_children(item)
                     }
+                } else if (item.querySelector('#tw-ob') || item.querySelector('#tw-gtlink')) {
+                    // Translate widget
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'translate-widget',
+                        title: '',
+                        description: text_from_childless_children(item)
+                    }
                 } else if (item.matches('.xpdbox')) {
                     // dictionary widget
                     parsed_item = {
                         ...parsed_item,
-                        type: 'dictionary-widget',
+                        type: 'translate-widget',
                         title: safe_prop(item.querySelector('.data-attrid[EntryHeader]'), 'innerText'),
                         description: text_from_childless_children(item.querySelector('.lr_container > div[jsslot]'), 'innerText'),
                     }
@@ -678,7 +692,7 @@ zoekplaatje.register_module(
 
                     parsed_item = {
                         ...parsed_item,
-                        type: 'related-queries-widget',
+                        type: 'related-queries',
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
                         description: description
                     }
