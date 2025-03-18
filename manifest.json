@@ -33,6 +33,7 @@
       "inc/dexie.js",
       "inc/he.js",
       "inc/moment.js",
+      "inc/lib.js",
       "js/background.js",
       "modules/google.js",
       "modules/baidu.js",
