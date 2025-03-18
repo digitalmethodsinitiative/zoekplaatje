@@ -249,7 +249,7 @@ zoekplaatje.register_module(
 
 
                 // todo: for some reason, the whole #rhs knowledge graph side bar gets selected sometimes, probably
-                //  because it gets loaded in as a 'correct' subelement and then moved around later depending on
+                //  because it gets loaded in as a 'correct' sub-element and then moved around later depending on
                 //  the viewport? Hard-code a skip for now!
                 if (item.matches("#rhs")) {
                     console.log('Skipping #rhs div')
@@ -268,6 +268,14 @@ zoekplaatje.register_module(
                         ...parsed_item,
                         type: 'did-you-mean',
                         title: title
+                    }
+                } else if (item.querySelector('.uzjuFc')) {
+                    // "Looks like there aren't any great matches" box
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'few-matches',
+                        title: '',
+                        description: text_from_childless_children(item)
                     }
                 } else if (item.matches('g-scrolling-carousel') && closest_parent(item, '#appbar')) {
                     // suggested topic/search card on top of the page
