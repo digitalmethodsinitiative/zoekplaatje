@@ -147,14 +147,14 @@ zoekplaatje.register_module(
                             title: item.querySelector('a[title] > div').innerText.trim(),
                             description: text_from_childless_children(item)
                         }
-                    } else if (item.matches('.b_nwsAns')) {
+                    } else if (item.matches('.b_nwsAns, .b_nwsAnsTopItem')) {
                         // news overview
                         parsed_item = {
                             ...parsed_item,
                             type: 'news-widget',
                             title: item.querySelector(selectors.title).innerText,
                             link: item.querySelector(selectors.link).getAttribute('href'),
-                            real_link: item.querySelector(selectors.link_real).innerText,
+                            real_link: safe_prop(item.querySelector('.nws-tr-link'), 'url'),
                             description: Array.from(item.querySelectorAll('.na_t_news_caption, .na_t')).map(headline => headline.innerText).join(', '),
                         }
                     } else if (item.matches('.b_imgans')) {
