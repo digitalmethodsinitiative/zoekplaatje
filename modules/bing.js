@@ -135,6 +135,7 @@ zoekplaatje.register_module(
                                 ad_item['link'] = 'https://' + ad_item['link'];
                             }
                             ad_item['domain'] = ad_item['real_link'].startsWith('http') ? ad_item['real_link'].split('/')[2] : ad_item['real_link'].split('/')[0];
+                            ad_item['domain'] = ad_item['domain'].split(/\s/g)[0];
                             index += 1;
                             results.push(ad_item);
                         }
@@ -162,8 +163,8 @@ zoekplaatje.register_module(
                             ...parsed_item,
                             type: 'image-widget',
                             title: item.querySelector(selectors.title).innerText,
-                            link: item.querySelector(selectors.link).getAttribute('href'),
-                            real_link: item.querySelector(selectors.link).getAttribute('href')
+                            link: safe_prop(item.querySelector('a.mmanstitle'),'href'),
+                            real_link: safe_prop(item.querySelector('a.mmanstitle'),'href'),
                         }
                     } else if (item.matches('.b_vidAns') || item.querySelector('#mm_vidreco_cat')) {
                         parsed_item = {
@@ -245,7 +246,7 @@ zoekplaatje.register_module(
                         parsed_item = {
                             ...parsed_item,
                             type: 'travel-widget',
-                            title: item.querySelector('.hdr_ttl_lnk').innerText,
+                            title: item.querySelector('.hdr_ttl_lnk, .dest_name').innerText,
                             description: item.querySelector('.cityDesc1').innerText
                         }
                     } else if (item.querySelector('.dynMap')) {
@@ -571,6 +572,7 @@ zoekplaatje.register_module(
                     index += 1;
                     parsed_item['real_link'] = !parsed_item['real_link'] || parsed_item['real_link'].indexOf('http') === 0 ? parsed_item['real_link'] : 'https://' + parsed_item['real_link'];
                     parsed_item['domain'] = parsed_item['real_link'].indexOf('http') === 0 ? parsed_item['real_link'].split('/')[2] : parsed_item['real_link'].split('/')[0];
+                    parsed_item['domain'] = parsed_item['domain'].split(/\s/g)[0];
 
                     results.push(parsed_item);
                 }
