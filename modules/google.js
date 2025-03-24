@@ -458,7 +458,7 @@ zoekplaatje.register_module(
                         description: Array.from(item.querySelectorAll('.related-question-pair')).map(question => question.getAttribute('data-q')).join(', '),
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
                     }
-                } else if ((item.querySelector('div.g') || item.matches('div.g')) && item.querySelector(selectors.description)) {
+                } else if ((item.querySelector('div.g') || item.matches('div.g') || item.querySelector('div > span > em')) && item.querySelector(selectors.description)) {
                     if (item.querySelector('div[role=complementary]')) {
                         // embedded sidebar item???
                         item.querySelector('div[role=complementary]').remove();
