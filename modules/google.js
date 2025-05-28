@@ -134,7 +134,7 @@ zoekplaatje.register_module(
                 // multiple results under #rso, else we'll fetch the results with the kp-wp-tab selectors
                 item_selectors.push('#center_col #rso > div')
             }
-        } else {
+        } else if (!gemini_response) {
             item_selectors.push('body > div > div:not(#tvcap)');
         }
 
@@ -217,7 +217,6 @@ zoekplaatje.register_module(
 
             for (let gemini_item of gemini_items) {
                 if (gemini_item.matches('span[data-huuid]')) {
-                    console.log("GEMINI TEXT")
                     // Gemini text
                     const gemini_text_part = safe_prop(gemini_item, 'innerText')
                     if (gemini_text_part) {
@@ -225,7 +224,6 @@ zoekplaatje.register_module(
                     }
                 } else if (gemini_item.matches('div[data-subtree="msc"]')) {
                     // Gemini links
-                    console.log("GEMINI LINKS")
                     const gemini_links_tmp = Array.from(gemini_item.querySelectorAll('a')).map(a => a.getAttribute('href').split('#:~:text')[0])
                     if (gemini_links_tmp.length > 0) {
                         gemini_links = gemini_links_tmp  // These are always complete, so we can just store them
@@ -250,6 +248,13 @@ zoekplaatje.register_module(
                 link: '----------------------'
             })*/
             for (let item of result_items) {
+
+                // for debugging:
+                // for (const item_selector of item_selectors) {
+                //     if (item.matches(item_selector.trim())) {
+                //         console.log("Found item with selector: " + item_selector)
+                //     }
+                // }
 
                 let parsed_item = {
                     id: now.format('x') + '-' + index,
@@ -729,6 +734,7 @@ zoekplaatje.register_module(
                     // unrecognised result type
                     // consider logging and fixing...!
                     console.log('unknown', item)
+
                     parsed_item = {
                         ...parsed_item,
                         description: text_from_childless_children(item)
