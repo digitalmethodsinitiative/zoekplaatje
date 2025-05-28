@@ -4,6 +4,7 @@ zoekplaatje.register_module(
     function (response, source_platform_url, source_url) {
         //console.log(response)
         let results = [];
+        let results_gemini = []
         let results_sidebar = [];
 
         // source_platform_url = URL in browser
@@ -13,6 +14,12 @@ zoekplaatje.register_module(
         let domain = source_url.split('/')[2];
         if (domain.indexOf('google') < 0) {
             return [];
+        }
+
+        // Store gemini responses
+        let gemini_response = false
+        if (source_url.includes("async/folsrch")) {
+            gemini_response = true
         }
 
         // we're going to need these to parse the data
@@ -84,8 +91,8 @@ zoekplaatje.register_module(
             // original result page
             resultpage = parser.parseFromString(response, 'text/html');
 
-        } else if (path.indexOf('search') === 0 && response.indexOf(')]}\'') === 0) {
-            // scroll-loaded extra results
+        } else if ((path.indexOf('search') === 0 && response.indexOf(')]}\'') === 0) || gemini_response) {
+            // scroll-loaded extra results or Gemini response
             const html = '<div' + response.split('<div').slice(1).join('<div').split('</div>').slice(0, -1).join('</div>') + '</div>';
             resultpage = parser.parseFromString(html, 'text/html');
             from_page = false;
@@ -94,6 +101,9 @@ zoekplaatje.register_module(
         }
 
         let item_selectors = [];
+
+        // AI overview parts
+        let gemini_selectors = 'span[data-huuid], div[data-subtree="msc"]'
 
         // 'did you mean' search correction and stuff like SafeSearch; always on top
         item_selectors.push('#oFNiHe');
@@ -173,9 +183,6 @@ zoekplaatje.register_module(
             item_selectors.push('#Odp5De');
         }
 
-        // AI answer (todo: contents aren't fetched because they're loaded in later, would be nice to add)
-        item_selectors.push('#eKIzJc')
-
         // bottom page stuff that's sometimes not in the main tab
         item_selectors.push('#bres')
 
@@ -192,14 +199,44 @@ zoekplaatje.register_module(
         else {
             item_selectors.push('#rhs > div[id], #rhs > block-component');
         }
+
+
         const results_selector = item_selectors.join(', ');
         console.log("Selecting items with the following CSS selectors:")
         console.log(results_selector);
 
         // go through results in DOM, using the selectors defined above...
         let result_items = resultpage.querySelectorAll(results_selector);
+
+        let gemini_text = []
+        let gemini_links = []
+        let query = ''
+
+        // Manage Gemini responses differently; store data per element, and group later.
+        if (gemini_response) {
+            let gemini_items = resultpage.querySelectorAll(gemini_selectors);
+
+            for (let gemini_item of gemini_items) {
+                if (gemini_item.matches('span[data-huuid]')) {
+                    console.log("GEMINI TEXT")
+                    // Gemini text
+                    const gemini_text_part = safe_prop(gemini_item, 'innerText')
+                    if (gemini_text_part) {
+                        gemini_text.push(gemini_text_part)
+                    }
+                } else if (gemini_item.matches('div[data-subtree="msc"]')) {
+                    // Gemini links
+                    console.log("GEMINI LINKS")
+                    const gemini_links_tmp = Array.from(gemini_item.querySelectorAll('a')).map(a => a.getAttribute('href').split('#:~:text')[0])
+                    if (gemini_links_tmp.length > 0) {
+                        gemini_links = gemini_links_tmp  // These are always complete, so we can just store them
+                    }
+                }
+            }
+        }
+
         if (result_items) {
-            let query = decodeURI(path.split('q=')[1].split('&')[0].split('#')[0]);
+            query = decodeURI(path.split('q=')[1].split('&')[0].split('#')[0]);
             const domain_prefix = 'https://' + domain;
 
             /*results.push({
@@ -214,6 +251,7 @@ zoekplaatje.register_module(
                 link: '----------------------'
             })*/
             for (let item of result_items) {
+
                 let parsed_item = {
                     id: now.format('x') + '-' + index,
                     timestamp: now.format('YYYY-MM-DD hh:mm:ss'),
@@ -227,7 +265,6 @@ zoekplaatje.register_module(
                     link: ''
                 };
 
-
                 // todo: for some reason, the whole #rhs knowledge graph side bar gets selected sometimes, probably
                 //  because it gets loaded in as a 'correct' sub-element and then moved around later depending on
                 //  the viewport? Hard-code a skip for now!
@@ -236,7 +273,7 @@ zoekplaatje.register_module(
                     continue
                 }
 
-                if (item.matches('#oFNiHe') && item.querySelector('omnient-visibility-control')) {
+                if (item.matches('#oFNiHe') && (item.querySelector('omnient-visibility-control, dynamic-visibility-control'))) {
                     // 'did you mean' suggestion box
                     let title = ''
                     if (item.matches('#taw')) {
@@ -269,17 +306,6 @@ zoekplaatje.register_module(
                         ...parsed_item,
                         type: 'suggested-topic-card',
                         description: text_from_childless_children(item)
-                    }
-                } else if (item.matches('#eKIzJc')) {
-                    // AI answer box. Should be loaded!
-                    // todo: add some kind of timeout so this is actually recognised when it's generated.
-                    // css selector for when it's loaded: 'div[id][data-q][data-al]'
-                    parsed_item = {
-                        ...parsed_item,
-                        type: 'ai-overview',
-                        title: '',
-                        description: Array.from(item.querySelectorAll('div[data-lht] > div > div')).map(d => d.innerText).join('\n'),
-                        link: Array.from(item.querySelectorAll('#folsrch-sources-1 > div > ul > li > a')).map(d => d.getAttribute('href')).join(','),
                     }
                 } else if (item.matches(".HdbW6")) {
                     // page subject
@@ -338,7 +364,7 @@ zoekplaatje.register_module(
                     parsed_item = {
                         ...parsed_item,
                         type: 'featured-snippet-widget',
-                        title: item.querySelector('h3').innerText,
+                        title: safe_prop(item.querySelector('h3'), 'innerText'),
                         link: safe_prop(item.querySelector('span[href]'), 'attr:href'),
                         description: safe_prop(item.querySelector("div[data-attrid='wa:/description']"), 'innerText')
                     }
@@ -733,18 +759,38 @@ zoekplaatje.register_module(
                 parsed_item['domain'] = parsed_item['link'].indexOf('http') === 0 ? parsed_item['link'].split('/')[2] : '';
                 index += 1;
 
-                // Sidebar items are sometimes interspersed with main SERP items in response.
-                // Add them at the end to keep the ranking in place.
                 if (parsed_item['section'] === 'sidebar-right') {
+                    // Sidebar items are sometimes interspersed with main SERP items in response.
+                    // Add them at the end to keep the ranking in place.
                     results_sidebar.push(parsed_item);
-                }
-                else {
+                } else {
                     results.push(parsed_item);
                 }
             }
         }
 
-        results = results.concat(results_sidebar)
+        // Recompile all results in order of SERP arrangement
+        // AI overview content is loaded later, but we want to keep it at the top of the results.
+        // Store them separately and later prepend them to all items.
+        if (gemini_text.length > 0) {
+            let result_gemini = [{
+                    id: now.format('x') + '-' + index,
+                    timestamp: now.format('YYYY-MM-DD hh:mm:ss'),
+                    source: domain,
+                    query: query,
+                    type: 'ai-overview',
+                    domain: '',
+                    title: '',
+                    description: gemini_text.join(" "),
+                    link: gemini_links.join(", "),
+                    section: 'top'
+            }]
+            results = result_gemini.concat(results)
+        }
+        if (results_sidebar) {
+            results = results.concat(results_sidebar)
+        }
+
         return results;
 
     }
