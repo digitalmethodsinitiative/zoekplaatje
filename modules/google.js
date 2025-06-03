@@ -4,7 +4,6 @@ zoekplaatje.register_module(
     function (response, source_platform_url, source_url) {
         //console.log(response)
         let results = [];
-        let results_gemini = []
         let results_sidebar = [];
 
         // source_platform_url = URL in browser
