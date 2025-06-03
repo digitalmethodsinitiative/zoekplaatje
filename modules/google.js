@@ -57,13 +57,12 @@ zoekplaatje.register_module(
         }
 
         function has_content(el) {
-            // Check if the element exists
+            // Check if the element exists and has content
             if (!el) {
                 return false;
             } if (el.textContent.trim() !== "") {
                 return true;
             } return el.childNodes.length > 0;
-
         }
 
         function text_from_childless_children(container) {
@@ -250,7 +249,7 @@ zoekplaatje.register_module(
             })*/
             for (let item of result_items) {
 
-                // for debugging:
+                // FOR DEBUGGING:
                 // for (const item_selector of item_selectors) {
                 //     if (item.matches(item_selector.trim())) {
                 //         console.log("Found item with selector: " + item_selector)
@@ -461,9 +460,14 @@ zoekplaatje.register_module(
                         link: domain + safe_prop(item.querySelector('title-with-lhs-icon a'), 'attr:href'),
                         title: safe_prop(item.querySelector('h3[role=heading]'), 'innerText')
                     }
-                } else if (((item.querySelector('div[role=presentation]') && item.querySelector('cite') && item.querySelector('img[src*=data]')) || item.querySelector("g-more-link a[href*='tbm=vid']")) && !item.querySelector('.kp_wholepage, .kp-wholepage-osrp, .ULSxyf')) {
+                } else if ((((item.querySelector('div[role=presentation]') && item.querySelector('cite')
+                    && item.querySelector('img[src*=data]'))
+                    || item.querySelector("g-more-link a[href*='tbm=vid']"))
+                    && !item.querySelector('.kp_wholepage, .kp-wholepage-osrp, .ULSxyf'))
+                    || item.querySelector('div > svg[height="32"]')) {
                     // video widget, showing related videos
                     // Sometimes this selects the whole SERP, so we add some negative selectors above
+                    // svg[height="32"] selects the 'play' svg
                     parsed_item = {
                         ...parsed_item,
                         type: 'video-widget',
@@ -490,29 +494,6 @@ zoekplaatje.register_module(
                         // use list of questions as description
                         description: Array.from(item.querySelectorAll('.related-question-pair')).map(question => question.getAttribute('data-q')).join(', '),
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
-                    }
-                } else if ((item.querySelector('div.g') || item.matches('div.g') || item.querySelector('div > span > em')) && item.querySelector(selectors.description)) {
-                    if (item.querySelector('div[role=complementary]')) {
-                        // embedded sidebar item???
-                        item.querySelector('div[role=complementary]').remove();
-                    }
-                    // an actual, organic result!
-                    // can either be a simple result or one with some extra stuff, e.g. site links.
-                    // it may or may also be wrapped in a div with g divs
-                    parsed_item['type'] = item.querySelector('g-img') ? 'organic-showcase' : 'organic';
-                    if (item.querySelector('div[data-attrid*=description]') && item.querySelector('.xpdopen')) {
-                        parsed_item['type'] = 'organic-summary';
-                    }
-                    let link = ''
-                    if (item.querySelector(selectors.title)) {
-                        link = safe_prop(item.querySelector(selectors.title).parentNode, 'attr:href')
-                    }
-                    parsed_item = {
-                        ...parsed_item,
-                        title: safe_prop(item.querySelector(selectors.title), 'innerText'),
-                        link: link,
-                        published: safe_prop(item.querySelector(selectors.published), 'innerText').replace(/â€".*$/g, '').replace(/—.*$/g, '').trim(), // remove the '—' and 'â€"' from the end of the date
-                        description: safe_prop(item.querySelector(selectors.description), 'innerText')
                     }
                 } else if (item.querySelector('div[role=listitem][data-attrid*=books]')) {
                     // books widget...
@@ -581,7 +562,7 @@ zoekplaatje.register_module(
                     // dictionary widget
                     parsed_item = {
                         ...parsed_item,
-                        type: 'translate-widget',
+                        type: 'dictionary-widget',
                         title: safe_prop(item.querySelector('.data-attrid[EntryHeader]'), 'innerText'),
                         description: text_from_childless_children(item.querySelector('.lr_container > div[jsslot]'), 'innerText'),
                     }
@@ -733,6 +714,28 @@ zoekplaatje.register_module(
                         link: domain_prefix + safe_prop(item.querySelector("a[href^='/search']:not(.a-no-hover-decoration)"), 'attr:href'),
                         description: Array.from(item.querySelectorAll('a.a-no-hover-decoration')).map(a => a.getAttribute('title')).join(', ')
                     }
+                } else if ((item.querySelector('div.g') || item.matches('div.g') || item.querySelector("div[data-rpos] > div[lang]")) && item.querySelector(selectors.description)) {
+                    if (item.querySelector('div[role=complementary]')) {
+                        // embedded sidebar item???
+                        item.querySelector('div[role=complementary]').remove();
+                    }
+                    // an actual, organic result!
+                    // can either be a simple result or one with some extra stuff, e.g. site links.
+                    // it may or may also be wrapped in a div with g divs
+                    parsed_item['type'] = item.querySelector('g-img') ? 'organic-showcase' : 'organic';
+                    if (item.querySelector('div[data-attrid*=description]') && item.querySelector('.xpdopen')) {
+                        parsed_item['type'] = 'organic-summary';
+                    }
+                    let link = ''
+                    if (item.querySelector(selectors.title)) {
+                        link = safe_prop(item.querySelector(selectors.title).parentNode, 'attr:href')
+                    }
+                    parsed_item = {
+                        ...parsed_item,
+                        title: safe_prop(item.querySelector(selectors.title), 'innerText'),
+                        link: link,
+                        description: safe_prop(item.querySelector(selectors.description), 'innerText')
+                    }
                 } else {
                     // unrecognised result type
                     // consider logging and fixing...!
@@ -742,6 +745,7 @@ zoekplaatje.register_module(
                         ...parsed_item,
                         description: text_from_childless_children(item)
                     }
+                    console.log(item.textContent.trim())
                     if (!has_content(item)) {
                         console.log('empty item, skipping for now');
                         continue;
@@ -776,8 +780,8 @@ zoekplaatje.register_module(
         }
 
         // Recompile all results in order of SERP arrangement
-        // AI overview content is loaded later, but we want to keep it at the top of the results.
-        // Store them separately and later prepend them to all items.
+        // AI overview content are loaded later, and we have to wait for the responses,
+        // so it unfortunately often has to be added later and be positioned as the last item.
         if (gemini_text.length > 0) {
             let result_gemini = [{
                     id: now.format('x') + '-' + index,
