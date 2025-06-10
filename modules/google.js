@@ -168,6 +168,11 @@ zoekplaatje.register_module(
         // we consider different cards as different items
         if (resultpage.querySelectorAll('.M8OgIe').length === 1) {
             item_selectors.push('.WJXODe > div, .e6hL7d > div');
+            item_selectors.push('' +
+                '#Odp5De div[data-attrid=CoreAnswerModuleHeader],' +
+                '#Odp5De .Qc895c,' +
+                '#Odp5De div[style][data-hveid],' +
+                '#Odp5De g-scrolling-carousel')
         }
 
         // ads are elsewhere in the hierarchy and, for a change, conveniently labeled
@@ -310,7 +315,14 @@ zoekplaatje.register_module(
                         type: 'suggested-topic-card',
                         description: text_from_childless_children(item)
                     }
-                } else if (item.matches(".HdbW6")) {
+                } else if (item.matches('div[data-attrid=CoreAnswerModuleHeader]')) {
+                    // entity answers, spanning the top of the page
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'page-answer',
+                        title: Array.from(item.querySelectorAll('div:first-of-type a > span, div:first-of-type span > span')).map(h => h.innerText).join(' ')
+                    }
+                } else if (item.matches('.HdbW6')) {
                     // page subject
                     let description = ''
                     if (item.querySelector('div[data-attrid=subtitle]')) {
@@ -353,6 +365,12 @@ zoekplaatje.register_module(
                         type: 'info-card' + subtype,
                         title: Array.from(item.querySelectorAll('div[role=heading], span[role=heading], .pe7FNb')).map(t => safe_prop(t, 'innerText')).join(', '),
                         description: text_from_childless_children(item)
+                    }
+                } else if (item.querySelector('div[data-attrid=CoreAnswerImageResult]')) {
+                    // info card with just images
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'info-card-images'
                     }
                 } else if (item.querySelector('#sports-app')) {
                     // widget with info about some sports club
