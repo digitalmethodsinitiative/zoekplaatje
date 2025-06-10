@@ -360,7 +360,7 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
                         link: safe_prop(item.querySelector('a'), 'attr:href')
                     }
-                } else if (item.matches('#Odp5De')) {
+                } else if (item.querySelector('block-component .xpdopen')) {
                     // 'featured snippet' banner
                     parsed_item = {
                         ...parsed_item,
@@ -711,7 +711,11 @@ zoekplaatje.register_module(
                         link: domain_prefix + safe_prop(item.querySelector("a[href^='/search']:not(.a-no-hover-decoration)"), 'attr:href'),
                         description: Array.from(item.querySelectorAll('a.a-no-hover-decoration')).map(a => a.getAttribute('title')).join(', ')
                     }
-                } else if ((item.querySelector('div.g') || item.matches('div.g') || item.querySelector("div[data-rpos] > div[lang]")) && item.querySelector(selectors.description)) {
+                } else if (
+                    (item.querySelector('div.g')
+                        || item.matches('div.g')
+                        || item.querySelector("div[data-rpos] div[lang]"))
+                    && item.querySelector(selectors.description)) {
                     if (item.querySelector('div[role=complementary]')) {
                         // embedded sidebar item???
                         item.querySelector('div[role=complementary]').remove();
