@@ -34,6 +34,7 @@ zoekplaatje.register_module(
             title: 'h3',
             link: 'span > a',
             description: 'div.VwiC3b, div.ITZIwc, div.xpdopen div.wDYxhc',  // ugh :(
+            published: 'span.YrbPuc',
         };
 
         function closest_parent(node, selector) {
@@ -221,6 +222,7 @@ zoekplaatje.register_module(
                     type: 'unknown',
                     domain: '',
                     title: '',
+                    published: '',
                     description: '',
                     link: ''
                 };
@@ -478,6 +480,7 @@ zoekplaatje.register_module(
                         ...parsed_item,
                         title: safe_prop(item.querySelector(selectors.title), 'innerText'),
                         link: link,
+                        published: safe_prop(item.querySelector(selectors.published), 'innerText').replace(/â€".*$/g, '').replace(/—.*$/g, '').trim(), // remove the '—' and 'â€"' from the end of the date
                         description: safe_prop(item.querySelector(selectors.description), 'innerText')
                     }
                 } else if (item.querySelector('div[role=listitem][data-attrid*=books]')) {
