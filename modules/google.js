@@ -100,9 +100,6 @@ zoekplaatje.register_module(
 
         let item_selectors = [];
 
-        // AI overview parts
-        let gemini_selectors = 'span[data-huuid], div[data-subtree="msc"]'
-
         // 'did you mean' search correction and stuff like SafeSearch; always on top
         item_selectors.push('#oFNiHe');
 
@@ -203,7 +200,6 @@ zoekplaatje.register_module(
             item_selectors.push('#rhs > div[id], #rhs > block-component');
         }
 
-
         const results_selector = item_selectors.join(', ');
         console.log("Selecting items with the following CSS selectors:")
         console.log(results_selector);
@@ -211,19 +207,26 @@ zoekplaatje.register_module(
         // go through results in DOM, using the selectors defined above...
         let result_items = resultpage.querySelectorAll(results_selector);
 
-        let gemini_text = []
         let gemini_links = []
         let query = ''
 
         // Manage Gemini responses differently; store data per element, and group later.
+        let gemini_selectors = 'span[data-huuid], div[data-subtree="msc"]'
+        let gemini_text = []
+
         if (gemini_response) {
             let gemini_items = resultpage.querySelectorAll(gemini_selectors);
 
             for (let gemini_item of gemini_items) {
                 if (gemini_item.matches('span[data-huuid]')) {
                     // Gemini text
-                    const gemini_text_part = safe_prop(gemini_item, 'innerText')
+                    console.log(gemini_item)
+                    let gemini_text_part = safe_prop(gemini_item, 'innerText')
                     if (gemini_text_part) {
+                        // Add newline if this is a header
+                        if (gemini_item.querySelector("strong") || gemini_item.querySelector("span[role='heading']")) {
+                            gemini_text_part += "\n"
+                        }
                         gemini_text.push(gemini_text_part)
                     }
                 } else if (gemini_item.matches('div[data-subtree="msc"]')) {
@@ -812,6 +815,7 @@ zoekplaatje.register_module(
                     type: 'ai-overview',
                     domain: '',
                     title: '',
+                    published: '',
                     description: gemini_text.join(" "),
                     link: gemini_links.join(", "),
                     section: 'top'
