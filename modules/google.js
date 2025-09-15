@@ -100,9 +100,6 @@ zoekplaatje.register_module(
 
         let item_selectors = [];
 
-        // AI overview parts
-        let gemini_selectors = 'span[data-huuid], div[data-subtree="msc"]'
-
         // 'did you mean' search correction and stuff like SafeSearch; always on top
         item_selectors.push('#oFNiHe');
 
@@ -168,6 +165,11 @@ zoekplaatje.register_module(
         // we consider different cards as different items
         if (resultpage.querySelectorAll('.M8OgIe').length === 1) {
             item_selectors.push('.WJXODe > div, .e6hL7d > div');
+            item_selectors.push('' +
+                '#Odp5De div[data-attrid=CoreAnswerModuleHeader],' +
+                '#Odp5De .Qc895c,' +
+                '#Odp5De div[style][data-hveid],' +
+                '#Odp5De g-scrolling-carousel')
         }
 
         // ads are elsewhere in the hierarchy and, for a change, conveniently labeled
@@ -198,7 +200,6 @@ zoekplaatje.register_module(
             item_selectors.push('#rhs > div[id], #rhs > block-component');
         }
 
-
         const results_selector = item_selectors.join(', ');
         console.log("Selecting items with the following CSS selectors:")
         console.log(results_selector);
@@ -206,19 +207,26 @@ zoekplaatje.register_module(
         // go through results in DOM, using the selectors defined above...
         let result_items = resultpage.querySelectorAll(results_selector);
 
-        let gemini_text = []
         let gemini_links = []
         let query = ''
 
         // Manage Gemini responses differently; store data per element, and group later.
+        let gemini_selectors = 'span[data-huuid], div[data-subtree="msc"]'
+        let gemini_text = []
+
         if (gemini_response) {
             let gemini_items = resultpage.querySelectorAll(gemini_selectors);
 
             for (let gemini_item of gemini_items) {
                 if (gemini_item.matches('span[data-huuid]')) {
                     // Gemini text
-                    const gemini_text_part = safe_prop(gemini_item, 'innerText')
+                    console.log(gemini_item)
+                    let gemini_text_part = safe_prop(gemini_item, 'innerText')
                     if (gemini_text_part) {
+                        // Add newline if this is a header
+                        if (gemini_item.querySelector("strong") || gemini_item.querySelector("span[role='heading']")) {
+                            gemini_text_part += "\n"
+                        }
                         gemini_text.push(gemini_text_part)
                     }
                 } else if (gemini_item.matches('div[data-subtree="msc"]')) {
@@ -310,7 +318,14 @@ zoekplaatje.register_module(
                         type: 'suggested-topic-card',
                         description: text_from_childless_children(item)
                     }
-                } else if (item.matches(".HdbW6")) {
+                } else if (item.matches('div[data-attrid=CoreAnswerModuleHeader]')) {
+                    // entity answers, spanning the top of the page
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'page-answer',
+                        title: Array.from(item.querySelectorAll('div:first-of-type a > span, div:first-of-type span > span')).map(h => h.innerText).join(' ')
+                    }
+                } else if (item.matches('.HdbW6')) {
                     // page subject
                     let description = ''
                     if (item.querySelector('div[data-attrid=subtitle]')) {
@@ -354,6 +369,12 @@ zoekplaatje.register_module(
                         title: Array.from(item.querySelectorAll('div[role=heading], span[role=heading], .pe7FNb')).map(t => safe_prop(t, 'innerText')).join(', '),
                         description: text_from_childless_children(item)
                     }
+                } else if (item.querySelector('div[data-attrid=CoreAnswerImageResult]')) {
+                    // info card with just images
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'info-card-images'
+                    }
                 } else if (item.querySelector('#sports-app')) {
                     // widget with info about some sports club
                     parsed_item = {
@@ -362,7 +383,7 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText'),
                         link: safe_prop(item.querySelector('a'), 'attr:href')
                     }
-                } else if (item.matches('#Odp5De')) {
+                } else if (item.querySelector('block-component .xpdopen')) {
                     // 'featured snippet' banner
                     parsed_item = {
                         ...parsed_item,
@@ -736,7 +757,11 @@ zoekplaatje.register_module(
                         link: domain_prefix + safe_prop(item.querySelector("a[href^='/search']:not(.a-no-hover-decoration)"), 'attr:href'),
                         description: Array.from(item.querySelectorAll('a.a-no-hover-decoration')).map(a => a.getAttribute('title')).join(', ')
                     }
-                } else if ((item.querySelector('div.g') || item.matches('div.g') || item.querySelector("div[data-rpos] > div[lang]")) && item.querySelector(selectors.description)) {
+                } else if (
+                    (item.querySelector('div.g')
+                        || item.matches('div.g')
+                        || item.querySelector("div[data-rpos] div[lang]"))
+                    && item.querySelector(selectors.description)) {
                     if (item.querySelector('div[role=complementary]')) {
                         // embedded sidebar item???
                         item.querySelector('div[role=complementary]').remove();
@@ -813,6 +838,7 @@ zoekplaatje.register_module(
                     type: 'ai-overview',
                     domain: '',
                     title: '',
+                    published: '',
                     description: gemini_text.join(" "),
                     link: gemini_links.join(", "),
                     section: 'top'
