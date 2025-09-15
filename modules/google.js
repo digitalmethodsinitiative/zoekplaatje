@@ -40,6 +40,7 @@ zoekplaatje.register_module(
             title: 'h3',
             link: 'span > a',
             description: 'div.VwiC3b, div.ITZIwc, div.xpdopen div.wDYxhc',  // ugh :(
+            published: 'span.YrbPuc',
         };
 
         function closest_parent(node, selector) {
@@ -262,6 +263,7 @@ zoekplaatje.register_module(
                     type: 'unknown',
                     domain: '',
                     title: '',
+                    published: '',
                     description: '',
                     link: ''
                 };
@@ -491,6 +493,29 @@ zoekplaatje.register_module(
                         // use list of questions as description
                         description: Array.from(item.querySelectorAll('.related-question-pair')).map(question => question.getAttribute('data-q')).join(', '),
                         title: safe_prop(item.querySelector('div[role=heading]'), 'innerText')
+                    }
+                } else if ((item.querySelector('div.g') || item.matches('div.g') || item.querySelector('div > span > em')) && item.querySelector(selectors.description)) {
+                    if (item.querySelector('div[role=complementary]')) {
+                        // embedded sidebar item???
+                        item.querySelector('div[role=complementary]').remove();
+                    }
+                    // an actual, organic result!
+                    // can either be a simple result or one with some extra stuff, e.g. site links.
+                    // it may or may also be wrapped in a div with g divs
+                    parsed_item['type'] = item.querySelector('g-img') ? 'organic-showcase' : 'organic';
+                    if (item.querySelector('div[data-attrid*=description]') && item.querySelector('.xpdopen')) {
+                        parsed_item['type'] = 'organic-summary';
+                    }
+                    let link = ''
+                    if (item.querySelector(selectors.title)) {
+                        link = safe_prop(item.querySelector(selectors.title).parentNode, 'attr:href')
+                    }
+                    parsed_item = {
+                        ...parsed_item,
+                        title: safe_prop(item.querySelector(selectors.title), 'innerText'),
+                        link: link,
+                        published: safe_prop(item.querySelector(selectors.published), 'innerText').replace(/â€".*$/g, '').replace(/—.*$/g, '').trim(), // remove the '—' and 'â€"' from the end of the date
+                        description: safe_prop(item.querySelector(selectors.description), 'innerText')
                     }
                 } else if (item.querySelector('div[role=listitem][data-attrid*=books]')) {
                     // books widget...
