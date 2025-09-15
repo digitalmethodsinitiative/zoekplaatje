@@ -27,7 +27,7 @@ zoekplaatje.register_module(
             results: "#content_left > div.result, #content_left > div.result-op, #content_left > .c-group-wrapper, .result-molecule[tpl='app/rs']",
             title: 'h3',
             link: 'h3 a',
-            description: 'span[class*=content-right], .c-span-last'
+            description: 'span[class*=content-right], .c-span-last, span[class*=summary-text]'
         };
 
         // check if file contains search results...
@@ -60,7 +60,7 @@ zoekplaatje.register_module(
                             type: 'organic',
                             title: item.querySelector(selectors.title).innerText,
                             link: item.querySelector(selectors.link).getAttribute('href'),
-                            description: item.querySelector(selectors.description).innerText
+                            description: safe_prop(item.querySelector(selectors.description), 'innerText')
                         }
                     } else if(item.matches('[tpl=fy_sg_dictwisenew_san]')) {
                         parsed_item = {...parsed_item,
@@ -170,6 +170,24 @@ zoekplaatje.register_module(
                             title: item.querySelector('h2, h3, h4, *[class*=title]').innerText,
                             description: item.querySelector('div[class*=short-answer]').innerText,
                             link: item.querySelector('a').getAttribute('href')
+                        }
+                    } else if(item.querySelector('div[class*=baikan-card')) {
+                        // baikan is another/new AI assistant?
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'baikan-ai-summary-widget',
+                            title: safe_prop(item.querySelector('div[data-show=summary]'), 'innerText'),
+                            description: safe_prop(item.querySelector('div[data-show=block_summary]'), 'innerText'),
+                            link: item.querySelector('a').getAttribute('href')
+                        }
+                    } else if(item.matches('div[tpl*=ai_agent_distribute]')) {
+                        // more AI!!!
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'ai-smart-reply-widget',
+                            title: safe_prop(item.querySelector('span.cosc-title-slot'), 'innerText'),
+                            description: safe_prop(item.querySelector('div[data-show=normal_content]'), 'innerText'),
+                            link: ''
                         }
                     } else if(item.matches(".result-molecule[tpl='app/rs']")) {
                         parsed_item = {
