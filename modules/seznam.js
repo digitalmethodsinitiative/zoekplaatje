@@ -73,10 +73,19 @@ zoekplaatje.register_module(
 
                     if(item.querySelector('h3') && item.querySelector('h3').innerText.indexOf('Obrázky') >= 0) {
                         // image panel
-                        parsed_item = {...parsed_item,
+                        parsed_item = {
+                            ...parsed_item,
                             type: 'image-widget',
                             title: safe_prop(item.querySelector('h3'), 'innerText'),
                             link: domain + safe_prop(item.querySelector('h3 a'), 'attr:href'),
+                        }
+                    } else if(item.querySelector('.b0bdbf')) {
+                        // summary, probably AI-powered
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'ai-summary-widget',
+                            description: safe_prop(item.querySelector('p'), 'innerText'),
+                            link: safe_prop(item.querySelector('a'), 'attr:href'),
                         }
                     } else if(item.querySelector('h3') && item.querySelector('h3').innerText.indexOf('Videa') >= 0) {
                         // video panel
