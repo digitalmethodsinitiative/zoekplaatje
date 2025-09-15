@@ -71,6 +71,17 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('h2'), 'innerText'),
                         description: Array.from(item.querySelectorAll('.Related-ButtonTextUp')).map(div => div.innerText.trim()).join(', ')
                     }
+                } else if(item.matches('[data-fast-name=neuro_answer]')) {
+                    // AI answer
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'ai-answer-widget',
+                        title: [
+                            safe_prop(item.querySelector('.FuturisIconWithDescriptionCard-FirstLine'), 'innerText'),
+                            safe_prop(item.querySelector('.FuturisIconWithDescriptionCard-SecondLine'), 'innerText')
+                        ].join(' '),
+                        description: ''
+                    }
                 } else {
                     // organic result
                     const type = (item.querySelector('.Sitelinks') || item.querySelector('.Scroller-Container')) ? 'organic-showcase' : 'organic';
@@ -78,7 +89,7 @@ zoekplaatje.register_module(
                         ...parsed_item,
                         type: type,
                         title: safe_prop(item.querySelector('h2'), 'innerText'),
-                        description: safe_prop(item.querySelector('div.TextContainer'), 'innerText'),
+                        description: safe_prop(item.querySelector('div.TextContainer, .OrganicTextContentSpan'), 'innerText'),
                         link: safe_prop(item.querySelector('.OrganicTitle a'), 'attr:href')
                     }
                 }
