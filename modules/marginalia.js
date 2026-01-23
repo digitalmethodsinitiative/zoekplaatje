@@ -37,7 +37,7 @@ zoekplaatje.register_module(
                     query: query,
                     type: 'organic',
                     domain: '',
-                    title: item.querySelector('h2 a').innerText.trim(),
+                    title: safe_prop(item.querySelector('h2 a'), 'innerText').trim(),
                     description: item.querySelector('p.leading-relaxed').innerText.trim(),
                     link: item.querySelector('a.text-liteblue').getAttribute('href')
                 };
