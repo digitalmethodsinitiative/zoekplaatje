@@ -97,6 +97,15 @@ zoekplaatje.register_module(
                             link: item.querySelector(selectors.link).getAttribute('href'),
                             description: item.querySelector('td').innerText
                         }
+                    } else if (item.matches('div[tpl*=yl_music_fan_singer]')) {
+                        // ...music things!
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'music-discography-widget',
+                            title: item.querySelector(selectors.title).innerText,
+                            link: '',
+                            description: ''
+                        }
                     } else if (item.matches('div[tpl*=yl_music_lrc]')) {
                         // ...music lyrics!
                         parsed_item = {
