@@ -71,6 +71,17 @@ zoekplaatje.register_module(
                         title: safe_prop(item.querySelector('h2'), 'innerText'),
                         description: Array.from(item.querySelectorAll('.Related-ButtonTextUp')).map(div => div.innerText.trim()).join(', ')
                     }
+                } else if(item.querySelector('.Translate_text')) {
+                    // related searches at the bottom
+                    const from = safe_prop(item.querySelector('.Translate-Select_type_source'), 'innerText');
+                    const to = safe_prop(item.querySelector('.Translate-Select_type_target'), 'innerText');
+                    const title = (from && to) ? from + ' <-> ' + to : '';
+                    parsed_item = {
+                        ...parsed_item,
+                        type: 'translate-widget',
+                        title: title,
+                        description: ''
+                    }
                 } else if(item.matches('[data-fast-name=neuro_answer]')) {
                     // AI answer
                     parsed_item = {
