@@ -146,7 +146,7 @@ zoekplaatje.register_module(
                             title: item.querySelector(selectors.title).innerText,
                             link: item.querySelector(selectors.link).getAttribute('href')
                         }
-                    } else if(item.matches('div[tpl*=news-realtime]')) {
+                    } else if(item.matches('div[tpl*=news-realtime]') || item.matches('div[tpl*=rel_base_realtime]')) {
                         // news widget
                         parsed_item = {
                             ...parsed_item,
