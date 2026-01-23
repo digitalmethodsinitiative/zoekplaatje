@@ -158,11 +158,11 @@ zoekplaatje.register_module(
                             real_link: safe_prop(item.querySelector('.nws-tr-link'), 'url'),
                             description: Array.from(item.querySelectorAll('.na_t_news_caption, .na_t')).map(headline => headline.innerText).join(', '),
                         }
-                    } else if (item.matches('.b_imgans')) {
+                    } else if (item.matches('.b_imgans') || item.querySelector('*[data-wptds-carousel]')) {
                         parsed_item = {
                             ...parsed_item,
                             type: 'image-widget',
-                            title: item.querySelector(selectors.title).innerText,
+                            title: safe_prop(item.querySelector(selectors.title), 'innerText'),
                             link: safe_prop(item.querySelector('a.mmanstitle'),'href'),
                             real_link: safe_prop(item.querySelector('a.mmanstitle'),'href'),
                         }
