@@ -183,7 +183,7 @@ zoekplaatje.register_module(
                             title: item.querySelector('.header_pron').innerText,
                             description: Array.from(item.querySelectorAll('.dc_pd')).map(div => div.innerText).join(' '),
                         }
-                    } else if (item.matches('.b_ans.b_mop') && item.querySelector('.df_alaskcarousel')) {
+                    } else if ((item.matches('.b_ans.b_mop') && item.querySelector('.df_alaskcarousel')) || item.querySelector('#relatedQnAListDisplay')) {
                         parsed_item = {
                             ...parsed_item,
                             type: 'related-questions',
