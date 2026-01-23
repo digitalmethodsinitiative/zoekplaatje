@@ -55,7 +55,7 @@ function activate_buttons() {
         let items = parseInt(button.parentNode.parentNode.querySelector('.num-items').innerText);
         let new_status = current;
 
-        if(button.classList.contains('download-csv') || button.classList.contains('reset')) {
+        if(button.classList.contains('download-csv') || button.classList.contains('reset') || button.classList.contains('preview')) {
             new_status = !(items > 0);
         }
 
@@ -131,14 +131,17 @@ async function get_stats() {
 
             let actions = createElement("td");
             let clear_button = createElement("button", {"data-platform": platform, "class": "reset"}, " Clear");
+            let preview_button = createElement("button", {"data-platform": platform, "class": "preview"}, " View");
             let download_button = createElement("button", {
                 "data-platform": platform,
                 "class": "download-csv"
             }, " .csv");
             clear_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-times'}));
+            preview_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-table'}));
             download_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
 
             actions.appendChild(clear_button);
+            actions.appendChild(preview_button);
             actions.appendChild(download_button);
 
             row.appendChild(actions);
@@ -166,7 +169,36 @@ async function get_stats() {
 async function button_handler(event) {
     let status = document.getElementById('upload-status');
 
-    if (event.target.matches('.reset')) {
+    if (event.target.matches('.popup-close')) {
+        document.querySelector('#popup').setAttribute('aria-hidden', 'true');
+
+    } else if (event.target.matches('.preview')) {
+        const platform = event.target.getAttribute('data-platform');
+        const entries = await get_results(platform);
+        const popup = document.querySelector('#popup table');
+        popup.textContent = '';
+
+        const headers = get_headers(entries);
+        const header = createElement('tr');
+        for(const field of headers) {
+            const th = createElement('th', {}, field);
+            header.appendChild(th);
+        }
+
+        popup.appendChild(header);
+        for(const item of entries) {
+            const row = createElement('tr', {});
+            for(const field of headers) {
+                const td = createElement('td', {}, item[field]);
+                row.appendChild(td);
+            }
+            popup.appendChild(row);
+        }
+
+        document.querySelector('#popup').setAttribute('aria-hidden', 'false');
+
+
+    } else if (event.target.matches('.reset')) {
         let platform = event.target.getAttribute('data-platform');
         await background.db.items.where("source_platform").equals(platform).delete();
 
@@ -197,6 +229,24 @@ async function button_handler(event) {
     }
 
     get_stats();
+}
+
+async function get_results(platform) {
+    let results = [];
+
+    await iterate_items(platform, function(item) {
+        results.push(item['data'])
+    });
+
+    return results;
+}
+
+function get_headers(results) {
+    let headers = [];
+    for (const field of Object.keys(results[0])) {
+        headers.push(field);
+    }
+    return headers;
 }
 /**
  * Get a CSV dump of items
