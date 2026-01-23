@@ -87,6 +87,14 @@ zoekplaatje.register_module(
                             description: safe_prop(item.querySelector('p'), 'innerText'),
                             link: safe_prop(item.querySelector('a'), 'attr:href'),
                         }
+                    } else if(item.querySelector('b.sec') && item.querySelector('*[data-e-a=link]') && item.querySelector('a.d72791')) {
+                        // summary, from a website
+                        parsed_item = {
+                            ...parsed_item,
+                            type: 'web-summary-widget',
+                            description: safe_prop(item.querySelector('p'), 'innerText'),
+                            link: safe_prop(item.querySelector('a'), 'attr:href'),
+                        }
                     } else if(item.querySelector('h3') && item.querySelector('h3').innerText.indexOf('Videa') >= 0) {
                         // video panel
                         parsed_item = {
