@@ -224,12 +224,12 @@ zoekplaatje.register_module(
                             title: item.querySelector('.sto_title').innerText,
                             description: Array.from(item.querySelectorAll('.sto_snippet')).map(snippet => snippet.innerText).join(' '),
                         }
-                    } else if (item.matches('.b_richnews')) {
+                    } else if (item.matches('.b_richnews') || item.querySelector("[data-tag='NewsAnswer.ACFContainer']")) {
                         // News widget
                         parsed_item = {
                             ...parsed_item,
                             type: 'news-widget',
-                            title: item.querySelector('#nws_ht').innerText,
+                            title: safe_prop(item.querySelector('h2'), 'innerText'),
                             description: text_from_childless_children(item),
                             link: Array.from(item.querySelectorAll('a.na_ccw')).map(a => a.getAttribute('href')).join(', ')
                         }
