@@ -109,12 +109,6 @@ window.zoekplaatje = {
             source_platform_url = source_url;
         }
 
-        // what url was loaded in the tab the previous time?
-        let old_url = '';
-        if (tabId in this.tab_url_map) {
-            old_url = this.tab_url_map[tabId];
-        }
-
         try {
             // get the *actual url* of the tab, not the url that the request
             // reports, which may be wrong
@@ -128,20 +122,26 @@ window.zoekplaatje = {
         // sometimes the tab URL changes without triggering a webNavigation
         // event! so check if the URL changes, and then increase the nav
         // index *as if* an event had triggered if it does
+        // read and update the URL with no await in between: the responses of
+        // one page are parsed at the same time, and only one may count the change
+        const old_url = this.tab_url_map[tabId];
+        this.tab_url_map[tabId] = source_platform_url;
         if (old_url && source_platform_url !== old_url) {
             await zoekplaatje.nav_handler(tabId);
         }
 
-        this.tab_url_map[tabId] = source_platform_url;
-
         // get the navigation index for the tab
         // if any of the processed items already exist for this combination of
         // navigation index and tab ID, it is ignored as a duplicate
-        let nav_index = await db.nav.where({"tab_id": tabId, "session": this.session}).first();
-        if (!nav_index) {
-            nav_index = {"tab_id": tabId, "session": this.session, "index": 0};
-            await db.nav.add(nav_index);
-        }
+        // in one transaction, so that responses parsed at the same time add one record
+        let nav_index = await db.transaction('rw', db.nav, async () => {
+            let nav = await db.nav.where({"tab_id": tabId, "session": this.session}).first();
+            if (!nav) {
+                nav = {"tab_id": tabId, "session": this.session, "index": 0};
+                await db.nav.add(nav);
+            }
+            return nav;
+        });
         nav_index = nav_index.session + ":" + nav_index.tab_id + ":" + nav_index.index;
 
         let item_list = [];
@@ -211,14 +211,16 @@ window.zoekplaatje = {
             tabId = tabId.tabId;
         }
 
-        // .first() gives the record; without it, this is a collection and the index becomes NaN
-        let nav = await db.nav.where({"session": this.session, "tab_id": tabId}).first();
-        if (!nav) {
-            nav = {"session": this.session, "tab_id": tabId, "index": 0}
-            await db.nav.add(nav);
-        }
-
-        await db.nav.where({"session": this.session, "tab_id": tabId}).modify({"index": nav["index"] + 1});
+        // use zoekplaatje, not this: Firefox calls event listeners without it.
+        // one transaction, so that navigations at the same time all count
+        await db.transaction('rw', db.nav, async () => {
+            const nav = await db.nav.where({"session": zoekplaatje.session, "tab_id": tabId}).first();
+            if (nav) {
+                await db.nav.update(nav.id, {"index": nav.index + 1});
+            } else {
+                await db.nav.add({"session": zoekplaatje.session, "tab_id": tabId, "index": 1});
+            }
+        });
     }
 }
 
@@ -228,9 +230,15 @@ browser.webRequest.onBeforeRequest.addListener(
     zoekplaatje.listener, {urls: ["https://*/*"], types: ["main_frame", "xmlhttprequest", "script"]}, ["blocking"]
 );
 
-browser.webNavigation.onCommitted.addListener(
-    zoekplaatje.nav_handler
-);
+browser.webNavigation.onCommitted.addListener((details) => {
+    // only the top frame starts a new page: frames (e.g. ads) also commit
+    if (details.frameId !== 0) {
+        return;
+    }
+    // the URL change is counted here, so parse_request must not count it again
+    zoekplaatje.tab_url_map[details.tabId] = details.url;
+    zoekplaatje.nav_handler(details.tabId);
+});
 
 browser.browserAction.onClicked.addListener(async () => {
     let tab = await zoekplaatje.has_tab();
