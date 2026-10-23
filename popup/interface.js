@@ -235,10 +235,28 @@ async function get_results(platform) {
     let results = [];
 
     await iterate_items(platform, function(item) {
-        results.push(item['data'])
+        results.push(export_row(item))
     });
 
     return results;
+}
+
+/**
+ * Row for a stored item, as the CSV file and the preview show it
+ *
+ * The timestamp comes from timestamp_collected (milliseconds), which every
+ * stored item has. All rows then have the same format in UTC, also rows that
+ * an older version stored with a local 12-hour time.
+ *
+ * @param item  Item as stored in the database
+ * @returns {Object}
+ */
+function export_row(item) {
+    const row = {...item['data']};
+    if (item['timestamp_collected']) {
+        row['timestamp'] = new Date(item['timestamp_collected']).toISOString().replace('T', ' ').slice(0, 19);
+    }
+    return row;
 }
 
 /**
