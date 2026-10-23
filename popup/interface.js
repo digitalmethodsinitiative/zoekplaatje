@@ -242,9 +242,14 @@ async function get_results(platform) {
 }
 
 function get_headers(results) {
+    // rows of one engine can have different fields, so use the fields of all rows
     let headers = [];
-    for (const field of Object.keys(results[0])) {
-        headers.push(field);
+    for (const result of results) {
+        for (const field of Object.keys(result)) {
+            if (!headers.includes(field)) {
+                headers.push(field);
+            }
+        }
     }
     return headers;
 }
@@ -257,44 +262,49 @@ function get_headers(results) {
  * @returns {Promise<Blob>}
  */
 async function get_blob(platform) {
-    let csv = [];
-    let has_header = false;
+    // rows of one engine can have different fields (e.g. Google's AI overview
+    // rows have no 'published'), so collect the fields of all rows first and
+    // write each value in its own column
+    let headers = [];
+    await iterate_items(platform, function(item) {
+        for(const field in item['data']) {
+            if(!headers.includes(field)) {
+                headers.push(field);
+            }
+        }
+    });
 
+    // the byte order mark makes Excel read the file as UTF-8, e.g. for Korean text
+    let csv = ['﻿', headers.map(csv_value).join(','), "\r\n"];
     await iterate_items(platform, function(item) {
         item = item['data'];
-        //write header at first iteration
-        if(!has_header) {
-            for(const field in item) {
-                if(!has_header) {
-                    has_header = true;
-                } else {
-                    csv.push(',');
-                }
-                csv.push(field);
-            }
-            csv.push("\r\n");
-        }
-
-        let index = 0;
-        for(const field in item) {
-            let value = String(item[field]).replace(/"/g, '""');
-            if(index > 0) {
-                csv.push(',');
-            }
-            if(value.indexOf("\n") >= 0
-                || value.indexOf("\r") >= 0
-                || value.indexOf('"') >= 0
-                || value.indexOf(',') >= 0) {
-                csv.push('"' + value + '"')
-            } else {
-                csv.push(value)
-            }
-            index += 1;
-        }
+        csv.push(headers.map(field => csv_value(item[field])).join(','));
         csv.push("\r\n");
     });
 
     return new Blob(csv, {type: 'text/csv'});
+}
+
+/**
+ * Format a value as a CSV field
+ *
+ * A missing value is an empty field.
+ *
+ * @param value
+ * @returns {string}
+ */
+function csv_value(value) {
+    if(value === undefined || value === null) {
+        return '';
+    }
+    value = String(value).replace(/"/g, '""');
+    if(value.indexOf("\n") >= 0
+        || value.indexOf("\r") >= 0
+        || value.indexOf('"') >= 0
+        || value.indexOf(',') >= 0) {
+        return '"' + value + '"';
+    }
+    return value;
 }
 
 /**
