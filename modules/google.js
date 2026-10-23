@@ -257,7 +257,7 @@ zoekplaatje.register_module(
 
                 let parsed_item = {
                     id: now.format('x') + '-' + index,
-                    timestamp: now.format('YYYY-MM-DD hh:mm:ss'),
+                    timestamp: now.utc().format('YYYY-MM-DD HH:mm:ss'),
                     source: domain,
                     query: query,
                     type: 'unknown',
@@ -807,7 +807,7 @@ zoekplaatje.register_module(
         if (gemini_text.length > 0) {
             let result_gemini = [{
                     id: now.format('x') + '-' + index,
-                    timestamp: now.format('YYYY-MM-DD hh:mm:ss'),
+                    timestamp: now.utc().format('YYYY-MM-DD HH:mm:ss'),
                     source: domain,
                     query: query,
                     type: 'ai-overview',
