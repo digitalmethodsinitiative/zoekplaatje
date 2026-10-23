@@ -241,17 +241,23 @@ async function get_results(platform) {
     return results;
 }
 
+/**
+ * Fields that most modules write, in the order of the Google module. Exports
+ * put these first, so that a column keeps its place whichever row comes first.
+ */
+const COMMON_FIELDS = ['id', 'timestamp', 'source', 'query', 'type', 'domain', 'title', 'published', 'description', 'link', 'section'];
+
 function get_headers(results) {
-    // rows of one engine can have different fields, so use the fields of all rows
-    let headers = [];
+    // rows of one engine can have different fields, so use the fields of all
+    // rows: the common fields first, then the others in order of appearance
+    const fields = new Set();
     for (const result of results) {
         for (const field of Object.keys(result)) {
-            if (!headers.includes(field)) {
-                headers.push(field);
-            }
+            fields.add(field);
         }
     }
-    return headers;
+    return COMMON_FIELDS.filter(field => fields.has(field))
+        .concat([...fields].filter(field => !COMMON_FIELDS.includes(field)));
 }
 /**
  * Get a CSV dump of items
@@ -262,25 +268,17 @@ function get_headers(results) {
  * @returns {Promise<Blob>}
  */
 async function get_blob(platform) {
-    // rows of one engine can have different fields (e.g. Google's AI overview
-    // rows have no 'published'), so collect the fields of all rows first and
-    // write each value in its own column
-    let headers = [];
-    await iterate_items(platform, function(item) {
-        for(const field in item['data']) {
-            if(!headers.includes(field)) {
-                headers.push(field);
-            }
-        }
-    });
+    // read the items once and take the header from the same items, so that an
+    // item captured during the export cannot have a field without a column
+    const results = await get_results(platform);
+    const headers = get_headers(results);
 
     // the byte order mark makes Excel read the file as UTF-8, e.g. for Korean text
-    let csv = ['﻿', headers.map(csv_value).join(','), "\r\n"];
-    await iterate_items(platform, function(item) {
-        item = item['data'];
-        csv.push(headers.map(field => csv_value(item[field])).join(','));
+    let csv = ['\ufeff', headers.map(csv_value).join(','), "\r\n"];
+    for (const result of results) {
+        csv.push(headers.map(field => csv_value(result[field])).join(','));
         csv.push("\r\n");
-    });
+    }
 
     return new Blob(csv, {type: 'text/csv'});
 }
