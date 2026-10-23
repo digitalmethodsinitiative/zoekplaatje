@@ -61,7 +61,7 @@ zoekplaatje.register_module(
                 for (const item of result_items) {
                     let parsed_item = {
                         id: now.format('x') + '-' + index,
-                        timestamp: now.utc().format('YYYY-MM-DD HH:mm:ss'),
+                        timestamp: now.format('YYYY-MM-DD hh:mm:ss'),
                         source: domain,
                         query: query,
                         type: 'unknown',
