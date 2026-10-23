@@ -153,7 +153,13 @@ window.zoekplaatje = {
                 continue;
             }
             // get items from module parser (will often be an empty list)
-            item_list = this.modules[module].callback(response, source_platform_url, source_url, nav_index);
+            // a module that fails on a response must not stop the other modules
+            try {
+                item_list = this.modules[module].callback(response, source_platform_url, source_url, nav_index);
+            } catch (error) {
+                console.error(`Zoekplaatje module ${module} could not parse ${source_url}`, error);
+                continue;
+            }
             if (item_list && item_list.length > 0) {
                 await Promise.all(item_list.map(async (item) => {
                     if (!item) {
