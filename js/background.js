@@ -211,7 +211,8 @@ window.zoekplaatje = {
             tabId = tabId.tabId;
         }
 
-        let nav = await db.nav.where({"session": this.session, "tab_id": tabId});
+        // .first() gives the record; without it, this is a collection and the index becomes NaN
+        let nav = await db.nav.where({"session": this.session, "tab_id": tabId}).first();
         if (!nav) {
             nav = {"session": this.session, "tab_id": tabId, "index": 0}
             await db.nav.add(nav);
