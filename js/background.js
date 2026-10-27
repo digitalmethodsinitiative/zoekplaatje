@@ -16,11 +16,14 @@ window.zoekplaatje = {
      * @param name  Module identifier
      * @param domain  Module primary domain name
      * @param callback  Function to parse request content with, returning an Array of extracted items
+     * @param get_redirect_token  Optional function that returns the token of a link if it is a redirect
+     * link hiding where a result leads, or null otherwise (see redirects.js)
      */
-    register_module: function (name, domain, callback) {
+    register_module: function (name, domain, callback, get_redirect_token = null) {
         this.modules[domain] = {
             name: name,
-            callback: callback
+            callback: callback,
+            get_redirect_token: get_redirect_token
         };
     },
 
@@ -155,6 +158,7 @@ window.zoekplaatje = {
             // get items from module parser (will often be an empty list)
             item_list = this.modules[module].callback(response, source_platform_url, source_url, nav_index);
             if (item_list && item_list.length > 0) {
+                let redirect_links = [];
                 await Promise.all(item_list.map(async (item) => {
                     if (!item) {
                         return;
@@ -164,7 +168,7 @@ window.zoekplaatje = {
                     let exists = await db.items.where({"item_id": item_id, "nav_index": nav_index}).first();
 
                     if (!exists) {
-                        await db.items.add({
+                        const id = await db.items.add({
                             "nav_index": nav_index,
                             "item_id": item_id,
                             "timestamp_collected": Date.now(),
@@ -174,9 +178,11 @@ window.zoekplaatje = {
                             "user_agent": navigator.userAgent,
                             "data": item
                         });
+                        redirect_links.push(...zoekplaatje.redirects.register(module, id, item["link"]));
                     }
                 }));
 
+                await zoekplaatje.redirects.enqueue(tabId, redirect_links);
                 return;
             }
         }
