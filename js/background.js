@@ -131,8 +131,7 @@ window.zoekplaatje = {
         }
 
         // get the navigation index for the tab
-        // if any of the processed items already exist for this combination of
-        // navigation index and tab ID, it is ignored as a duplicate
+        // it tells which page view an item was captured on
         // in one transaction, so that responses parsed at the same time add one record
         let nav_index = await db.transaction('rw', db.nav, async () => {
             let nav = await db.nav.where({"tab_id": tabId, "session": this.session}).first();
@@ -161,27 +160,19 @@ window.zoekplaatje = {
                 continue;
             }
             if (item_list && item_list.length > 0) {
-                await Promise.all(item_list.map(async (item) => {
-                    if (!item) {
-                        return;
-                    }
-
-                    let item_id = item["id"];
-                    let exists = await db.items.where({"item_id": item_id, "nav_index": nav_index}).first();
-
-                    if (!exists) {
-                        await db.items.add({
-                            "nav_index": nav_index,
-                            "item_id": item_id,
-                            "timestamp_collected": Date.now(),
-                            "source_platform": module,
-                            "source_platform_url": source_platform_url,
-                            "source_url": source_url,
-                            "user_agent": navigator.userAgent,
-                            "data": item
-                        });
-                    }
-                }));
+                // one time for all items of a response, so that the rows of one
+                // page have the same timestamp in the export
+                const timestamp_collected = Date.now();
+                await Promise.all(item_list.filter(item => item).map(item => db.items.add({
+                    "nav_index": nav_index,
+                    "item_id": item["id"],
+                    "timestamp_collected": timestamp_collected,
+                    "source_platform": module,
+                    "source_platform_url": source_platform_url,
+                    "source_url": source_url,
+                    "user_agent": navigator.userAgent,
+                    "data": item
+                })));
 
                 return;
             }
