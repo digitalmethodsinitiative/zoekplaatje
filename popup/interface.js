@@ -87,7 +87,7 @@ async function toggle_listening(e) {
  * Update favicon depending on whether capture is enabled
  */
 function update_icon() {
-    const any_enabled = Array.from(document.querySelectorAll('.toggle-switch input')).filter(item => item.checked);
+    const any_enabled = Array.from(document.querySelectorAll('#item-table .toggle-switch input')).filter(item => item.checked);
     const path = any_enabled.length > 0 ? '/images/icon-96-enabled.png' : '/images/icon-96.png';
     document.querySelector('link[rel~=icon]').setAttribute('href', path);
 }
@@ -153,7 +153,30 @@ async function get_stats() {
 
     activate_buttons();
     update_icon();
+    update_resolve_status();
     init_tooltips();
+}
+
+/**
+ * Show how many hidden Google links are still to be resolved
+ */
+function update_resolve_status() {
+    const status = background.zoekplaatje.redirects.get_status();
+    let text = '';
+    if (status.outstanding > 0) {
+        text = status.outstanding + (status.outstanding === 1 ? ' link' : ' links') + ' still to be resolved. ';
+        if (status.paused_until) {
+            const until = new Date(status.paused_until).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+            text += 'Paused until ' + until + ', because Google asked for a CAPTCHA.';
+        } else {
+            text += 'Stay on Google in the tab you searched in until this is done.';
+        }
+    }
+
+    const status_element = document.querySelector('#resolve-status');
+    if (status_element.textContent !== text) {
+        status_element.textContent = text;
+    }
 }
 
 /**
@@ -395,6 +418,10 @@ function fastForward(lastRow, idProp, otherCriteria) {
 document.addEventListener('DOMContentLoaded', async function () {
     get_stats();
     setInterval(get_stats, 1000);
+
+    const resolve_links = await background.browser.storage.local.get(['zs-resolve-links']);
+    document.querySelector('#zs-resolve-links').checked = !!parseInt(resolve_links['zs-resolve-links']);
+    document.querySelector('#zs-resolve-links').addEventListener('change', toggle_listening);
 
     document.addEventListener('click', button_handler);
 });
