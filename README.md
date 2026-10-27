@@ -41,6 +41,22 @@ background. You can then download the results as a .csv file with the button in 
 want to inspect the results. Make sure to cross-reference the results with what you see in your browser, at least 
 initially, to understand what data is (and is not!) collected and how it is parsed.
 
+### Hidden Google result links
+Google sometimes hides where its results lead: instead of linking to a result directly, it links to a redirect on its 
+own domain with an encrypted token (`https://www.google.com/goto?url=CAES...`). This mostly seems to happen in fresh or 
+logged-out browser profiles. The actual URL is then not in the page, so Zoekplaatje initially records the redirect link,
+and the domain Google displays with the result.
+
+When you click such a result, Zoekplaatje records where it leads and updates the captured result. You can also enable
+*Resolve hidden Google result links* in the Zoekplaatje interface. Zoekplaatje will then request each redirect link from
+the result page, one every few seconds, without visiting the result itself, and update the captured results. The number
+of links still to be resolved is shown on the Zoekplaatje toolbar button and in the interface. Links are only resolved
+while the tab you searched in shows a Google page, so stay on Google until the number disappears. Turning the setting off
+stops resolving any remaining links. Note that
+Google may count these requests as clicks on the results. If Google starts asking for a CAPTCHA, Zoekplaatje stops
+resolving links for half an hour. Links can only be resolved while the browser is open; results captured before 
+restarting the browser keep their redirect link.
+
 ## Credits & license
 Zoekplaatje was developed by Stijn Peeters for the [Digital Methods Initiative](https://digitalmethods.net) and is 
 licensed under the Mozilla Public License, 2.0. Refer to the LICENSE file for more information.  It is heavily based on 
