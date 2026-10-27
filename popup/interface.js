@@ -293,9 +293,12 @@ async function get_blob(platform) {
 
     // the byte order mark makes Excel read the file as UTF-8, e.g. for Korean text
     let csv = ['\ufeff', headers.map(csv_value).join(','), "\r\n"];
-    for (const result of results) {
-        csv.push(headers.map(field => csv_value(result[field])).join(','));
+    for (let i = 0; i < results.length; i++) {
+        csv.push(headers.map(field => csv_value(results[i][field])).join(','));
         csv.push("\r\n");
+        // drop the row once it is written, so that the rows and the CSV lines
+        // are not both in memory in full
+        results[i] = null;
     }
 
     return new Blob(csv, {type: 'text/csv'});
