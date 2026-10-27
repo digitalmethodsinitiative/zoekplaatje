@@ -291,8 +291,7 @@ async function get_blob(platform) {
     const results = await get_results(platform);
     const headers = get_headers(results);
 
-    // the byte order mark makes Excel read the file as UTF-8, e.g. for Korean text
-    let csv = ['\ufeff', headers.map(csv_value).join(','), "\r\n"];
+    let csv = [headers.map(csv_value).join(','), "\r\n"];
     for (let i = 0; i < results.length; i++) {
         csv.push(headers.map(field => csv_value(results[i][field])).join(','));
         csv.push("\r\n");

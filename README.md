@@ -41,11 +41,8 @@ background. You can then download the results as a .csv file with the button in 
 want to inspect the results. Make sure to cross-reference the results with what you see in your browser, at least 
 initially, to understand what data is (and is not!) collected and how it is parsed.
 
-The .csv file uses UTF-8 and starts with a byte order mark, so that Excel shows non-Latin text (for example Korean) 
-correctly. The `timestamp` column gives the time of capture in UTC, as `YYYY-MM-DD HH:MM:SS`. To read the file with 
-Python's `csv` module, open it with `encoding='utf-8-sig'`, so that the first column name does not start with the byte 
-order mark. Values are written as they were captured, so a spreadsheet program may run a value that starts with `=` as 
-a formula.
+The .csv file uses UTF-8. The `timestamp` column gives the time of capture in UTC, as `YYYY-MM-DD HH:MM:SS`. Values 
+are written as they were captured, so a spreadsheet program may run a value that starts with `=` as a formula.
 
 ## Credits & license
 Zoekplaatje was developed by Stijn Peeters for the [Digital Methods Initiative](https://digitalmethods.net) and is 
