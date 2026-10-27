@@ -3,8 +3,8 @@
  *
  * Some search engines hide where results lead behind a redirect link with an
  * encrypted token that only the engine itself can resolve (e.g. Google's
- * /goto?url=CAES... links). Modules recognise these links with the
- * get_redirect_token function they register. Captured redirect links are
+ * /goto?url=CAES... links). Modules recognise these links with the redirect
+ * functions they register (see register_module). Captured redirect links are
  * remembered here, so the captured items can be updated once it is known where
  * the links lead: when the user clicks a result, or when the links are resolved
  * automatically (if enabled in the interface).
@@ -19,18 +19,12 @@ window.zoekplaatje.redirects = {
      * Get the token of a redirect link
      *
      * @param link  URL to check
-     * @param module  Module to check the link with; all modules if null
+     * @param module  Module to check the link with
      * @returns {string|null}  Token, or null if this is not a redirect link
      */
-    get_token: function (link, module = null) {
-        for (const domain of module ? [module] : Object.keys(zoekplaatje.modules)) {
-            const get_redirect_token = zoekplaatje.modules[domain].get_redirect_token;
-            const token = get_redirect_token ? get_redirect_token(link) : null;
-            if (token) {
-                return token;
-            }
-        }
-        return null;
+    get_token: function (link, module) {
+        const get_redirect_token = zoekplaatje.modules[module].redirects.get_redirect_token;
+        return get_redirect_token ? get_redirect_token(link) : null;
     },
 
     /**
@@ -170,17 +164,22 @@ window.zoekplaatje.redirects = {
             return;
         }
 
+        // find the module that captured this redirect link
         const redirects = zoekplaatje.redirects;
-        const token = redirects.get_token(details.url);
-        if (!token || !(token in redirects.links)) {
+        const module = Object.keys(zoekplaatje.modules).find(module => {
+            const token = redirects.get_token(details.url, module);
+            return token && token in redirects.links;
+        });
+        if (!module) {
             return;
         }
 
+        const token = redirects.get_token(details.url, module);
+        const is_captcha = zoekplaatje.modules[module].redirects.is_captcha;
         const location_header = details.responseHeaders.find(header => header.name.toLowerCase() === 'location');
         const destination = location_header ? new URL(location_header.value, details.url).href : '';
-        if (details.statusCode === 429 || /^https:\/\/[^\/]*google\.[^\/]+\/sorry\//.test(destination)) {
-            // the search engine wants a CAPTCHA solved (/sorry/ is google's CAPTCHA page); stop resolving
-            // links for a while
+        if (details.statusCode === 429 || (is_captcha && is_captcha(destination))) {
+            // the search engine wants a CAPTCHA solved; stop resolving links for a while
             redirects.paused_until = Date.now() + 30 * 60 * 1000;
             return;
         } else if (!destination) {

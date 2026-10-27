@@ -16,14 +16,15 @@ window.zoekplaatje = {
      * @param name  Module identifier
      * @param domain  Module primary domain name
      * @param callback  Function to parse request content with, returning an Array of extracted items
-     * @param get_redirect_token  Optional function that returns the token of a link if it is a redirect
-     * link hiding where a result leads, or null otherwise (see redirects.js)
+     * @param redirects  Optional functions for redirect links that hide where results lead (see
+     * redirects.js): get_redirect_token(link) returns the token of such a link, or null if it is not
+     * one; is_captcha(url) returns whether a redirect leads to the engine's CAPTCHA page
      */
-    register_module: function (name, domain, callback, get_redirect_token = null) {
+    register_module: function (name, domain, callback, redirects = {}) {
         this.modules[domain] = {
             name: name,
             callback: callback,
-            get_redirect_token: get_redirect_token
+            redirects: redirects
         };
     },
 

@@ -857,19 +857,25 @@ zoekplaatje.register_module(
         return results;
 
     },
-    function get_redirect_token(link) {
-        // google sometimes hides where results lead behind a link to its own domain with an encrypted
-        // token (e.g. https://www.google.com/goto?url=CAES...), which only google can resolve when the
-        // link is requested. /url? links that include the destination itself are unwrapped when parsing
-        try {
-            const url = new URL(link);
-            const token = url.searchParams.get('url');
-            if (/(^|\.)google(\.[a-z]+)+$/.test(url.hostname) && ['/goto', '/url'].includes(url.pathname) && token && token.indexOf('http') !== 0) {
-                return token;
+    {
+        get_redirect_token: function (link) {
+            // google sometimes hides where results lead behind a link to its own domain with an encrypted
+            // token (e.g. https://www.google.com/goto?url=CAES...), which only google can resolve when the
+            // link is requested. /url? links that include the destination itself are unwrapped when parsing
+            try {
+                const url = new URL(link);
+                const token = url.searchParams.get('url');
+                if (/(^|\.)google(\.[a-z]+)+$/.test(url.hostname) && ['/goto', '/url'].includes(url.pathname) && token && token.indexOf('http') !== 0) {
+                    return token;
+                }
+            } catch (e) {
+                // not a valid URL
             }
-        } catch (e) {
-            // not a valid URL
+            return null;
+        },
+        is_captcha: function (url) {
+            // google redirects to a CAPTCHA at /sorry/ when it suspects automated traffic
+            return /^https:\/\/[^\/]*google\.[^\/]+\/sorry\//.test(url);
         }
-        return null;
     }
 );
