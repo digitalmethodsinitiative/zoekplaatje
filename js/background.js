@@ -183,7 +183,7 @@ window.zoekplaatje = {
                     }
                 }));
 
-                await zoekplaatje.redirects.enqueue(tabId, redirect_links);
+                await zoekplaatje.redirects.enqueue(module, tabId, redirect_links);
                 return;
             }
         }

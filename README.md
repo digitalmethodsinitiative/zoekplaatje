@@ -49,13 +49,19 @@ and the domain Google displays with the result.
 
 When you click such a result, Zoekplaatje records where it leads and updates the captured result. You can also enable
 *Resolve hidden Google result links* in the Zoekplaatje interface. Zoekplaatje will then request each redirect link from
-the result page, one every few seconds, without visiting the result itself, and update the captured results. The number
-of links still to be resolved is shown on the Zoekplaatje toolbar button and in the interface. Links are only resolved
-while the tab you searched in shows a Google page, so stay on Google until the number disappears. Turning the setting off
-stops resolving any remaining links. Note that
-Google may count these requests as clicks on the results. If Google starts asking for a CAPTCHA, Zoekplaatje stops
-resolving links for half an hour. Links can only be resolved while the browser is open; results captured before 
-restarting the browser keep their redirect link.
+an open Google result page, one every few seconds, without visiting the result itself, and update the captured results.
+Note that Google may count these requests as clicks on the results.
+
+The number of links still to be resolved is shown on the Zoekplaatje toolbar button. Hover over the button, or open the
+Zoekplaatje interface, to see what it is waiting for:
+* If no Google result page is open anymore, the number turns orange. Resolving continues once you open or reload a 
+  Google result page.
+* If Google asks for a CAPTCHA, the number turns red and Zoekplaatje stops resolving links until you have solved it.
+  Reload a Google search and solve the CAPTCHA; resolving continues once Google shows results again.
+
+In both cases you can also click *Try again* in the interface. Turning the setting off stops resolving any remaining
+links. Links can only be resolved while the browser is open; results captured before restarting the browser keep their
+redirect link.
 
 ## Credits & license
 Zoekplaatje was developed by Stijn Peeters for the [Digital Methods Initiative](https://digitalmethods.net) and is 

@@ -328,8 +328,12 @@
             margin-bottom: 1em;
         }
 
-        #resolve-status:empty {
-            display: none;
+        #resolve-status p {
+            margin: 0 0 0.5em 0;
+        }
+
+        #resolve-status[data-state=waiting] p, #resolve-status[data-state=captcha] p {
+            font-weight: bold;
         }
 
         #disclaimer {
@@ -425,7 +429,10 @@
             Resolve hidden Google result links
             <span class="tooltippable" title="Google sometimes hides where results lead behind a redirect link. When enabled, Zoekplaatje asks Google where each of these leads, from the result page, one link every few seconds. Google may count this as a click on each result. Results you click yourself are always resolved.">?</span>
         </div>
-        <div id="resolve-status"></div>
+        <div id="resolve-status" aria-hidden="true">
+            <p></p>
+            <button id="resolve-retry" aria-hidden="true"><i class="fa fa-rotate-right"></i> Try again</button>
+        </div>
     </section>
     <section id="disclaimer">
         Result capture may be incomplete or break as search engines change their interface. Always verify captured data by cross-referencing it with what you see in your browser.

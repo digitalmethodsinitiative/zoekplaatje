@@ -158,25 +158,21 @@ async function get_stats() {
 }
 
 /**
- * Show how many hidden Google links are still to be resolved
+ * Show whether hidden result links are still to be resolved
+ *
+ * With a button to try again when resolving is waiting for something.
  */
 function update_resolve_status() {
     const status = background.zoekplaatje.redirects.get_status();
-    let text = '';
-    if (status.outstanding > 0) {
-        text = status.outstanding + (status.outstanding === 1 ? ' link' : ' links') + ' still to be resolved. ';
-        if (status.paused_until) {
-            const until = new Date(status.paused_until).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-            text += 'Paused until ' + until + ', because Google asked for a CAPTCHA.';
-        } else {
-            text += 'Stay on Google in the tab you searched in until this is done.';
-        }
-    }
+    const container = document.querySelector('#resolve-status');
+    const message = container.querySelector('p');
 
-    const status_element = document.querySelector('#resolve-status');
-    if (status_element.textContent !== text) {
-        status_element.textContent = text;
+    container.setAttribute('aria-hidden', status.state === 'idle' ? 'true' : 'false');
+    container.setAttribute('data-state', status.state);
+    if (message.textContent !== status.message) {
+        message.textContent = status.message;
     }
+    container.querySelector('#resolve-retry').setAttribute('aria-hidden', ['waiting', 'captcha'].includes(status.state) ? 'false' : 'true');
 }
 
 /**
@@ -192,7 +188,10 @@ function update_resolve_status() {
 async function button_handler(event) {
     let status = document.getElementById('upload-status');
 
-    if (event.target.matches('.popup-close')) {
+    if (event.target.closest('#resolve-retry')) {
+        await background.zoekplaatje.redirects.retry();
+
+    } else if (event.target.matches('.popup-close')) {
         document.querySelector('#popup').setAttribute('aria-hidden', 'true');
 
     } else if (event.target.matches('.preview')) {
