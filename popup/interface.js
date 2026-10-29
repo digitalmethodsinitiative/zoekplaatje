@@ -235,18 +235,47 @@ async function get_results(platform) {
     let results = [];
 
     await iterate_items(platform, function(item) {
-        results.push(item['data'])
+        results.push(export_row(item))
     });
 
     return results;
 }
 
-function get_headers(results) {
-    let headers = [];
-    for (const field of Object.keys(results[0])) {
-        headers.push(field);
+/**
+ * Row for a stored item, as the CSV file and the preview show it
+ *
+ * The timestamp comes from timestamp_collected (milliseconds), which every
+ * stored item has. All rows then have the same format in UTC, also rows that
+ * an older version stored with a local 12-hour time.
+ *
+ * @param item  Item as stored in the database
+ * @returns {Object}
+ */
+function export_row(item) {
+    const row = {...item['data']};
+    if (item['timestamp_collected']) {
+        row['timestamp'] = new Date(item['timestamp_collected']).toISOString().replace('T', ' ').slice(0, 19);
     }
-    return headers;
+    return row;
+}
+
+/**
+ * Fields that most modules write, in the order of the Google module. Exports
+ * put these first, so that a column keeps its place whichever row comes first.
+ */
+const COMMON_FIELDS = ['id', 'timestamp', 'source', 'query', 'type', 'domain', 'title', 'published', 'description', 'link', 'section'];
+
+function get_headers(results) {
+    // rows of one engine can have different fields, so use the fields of all
+    // rows: the common fields first, then the others in order of appearance
+    const fields = new Set();
+    for (const result of results) {
+        for (const field of Object.keys(result)) {
+            fields.add(field);
+        }
+    }
+    return COMMON_FIELDS.filter(field => fields.has(field))
+        .concat([...fields].filter(field => !COMMON_FIELDS.includes(field)));
 }
 /**
  * Get a CSV dump of items
@@ -257,44 +286,44 @@ function get_headers(results) {
  * @returns {Promise<Blob>}
  */
 async function get_blob(platform) {
-    let csv = [];
-    let has_header = false;
+    // read the items once and take the header from the same items, so that an
+    // item captured during the export cannot have a field without a column
+    const results = await get_results(platform);
+    const headers = get_headers(results);
 
-    await iterate_items(platform, function(item) {
-        item = item['data'];
-        //write header at first iteration
-        if(!has_header) {
-            for(const field in item) {
-                if(!has_header) {
-                    has_header = true;
-                } else {
-                    csv.push(',');
-                }
-                csv.push(field);
-            }
-            csv.push("\r\n");
-        }
-
-        let index = 0;
-        for(const field in item) {
-            let value = String(item[field]).replace(/"/g, '""');
-            if(index > 0) {
-                csv.push(',');
-            }
-            if(value.indexOf("\n") >= 0
-                || value.indexOf("\r") >= 0
-                || value.indexOf('"') >= 0
-                || value.indexOf(',') >= 0) {
-                csv.push('"' + value + '"')
-            } else {
-                csv.push(value)
-            }
-            index += 1;
-        }
+    let csv = [headers.map(csv_value).join(','), "\r\n"];
+    for (let i = 0; i < results.length; i++) {
+        csv.push(headers.map(field => csv_value(results[i][field])).join(','));
         csv.push("\r\n");
-    });
+        // drop the row once it is written, so that the rows and the CSV lines
+        // are not both in memory in full
+        results[i] = null;
+    }
 
     return new Blob(csv, {type: 'text/csv'});
+}
+
+/**
+ * Format a value as a CSV field
+ *
+ * A missing value is an empty field. Other values are written as they were
+ * captured.
+ *
+ * @param value
+ * @returns {string}
+ */
+function csv_value(value) {
+    if(value === undefined || value === null) {
+        return '';
+    }
+    value = String(value).replace(/"/g, '""');
+    if(value.indexOf("\n") >= 0
+        || value.indexOf("\r") >= 0
+        || value.indexOf('"') >= 0
+        || value.indexOf(',') >= 0) {
+        return '"' + value + '"';
+    }
+    return value;
 }
 
 /**
