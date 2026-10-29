@@ -57,8 +57,9 @@ with the result.
 
 When you click a result with a hidden link, Zoekplaatje records where it leads. You can also enable *Resolve hidden
 Google result links* in the Zoekplaatje interface. Zoekplaatje will then request each hidden link from an open Google
-result page, one every few seconds, without visiting the result itself. Note that Google may count these requests as
-clicks on the results.
+result page, one every few seconds, without visiting the result itself. This includes hidden links of results you
+captured before enabling it (unless you have cleared them since). Note that Google may count these requests as clicks
+on the results.
 
 The number of links still to be resolved is shown on the Zoekplaatje toolbar button. Hover over the button, or open the
 Zoekplaatje interface, to see what it is waiting for:

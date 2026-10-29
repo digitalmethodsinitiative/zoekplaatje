@@ -176,7 +176,7 @@ window.zoekplaatje = {
                         "user_agent": navigator.userAgent,
                         "data": item
                     });
-                    redirect_links.push(...zoekplaatje.redirects.register(module, id, item["link"]));
+                    redirect_links.push(...await zoekplaatje.redirects.register(module, id, item["link"]));
                 }));
 
                 await zoekplaatje.redirects.enqueue(module, tabId, redirect_links);

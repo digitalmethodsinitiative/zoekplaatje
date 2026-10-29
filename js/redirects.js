@@ -69,27 +69,63 @@ window.zoekplaatje.redirects = {
     /**
      * Remember the redirect links of a captured item
      *
-     * So the item can be updated once it is known where the links lead.
+     * So the item can be updated once it is known where the links lead. If
+     * that is known already, because the same link was captured and resolved
+     * before, the item is updated right away.
      *
      * @param module  Module the item was captured with
      * @param id  Database ID of the item
      * @param links  Link(s) of the item, comma-separated if more than one
      * @returns {Array}  Redirect links that were not seen before
      */
-    register: function (module, id, links) {
+    register: async function (module, id, links) {
         let new_links = [];
+        let resolved = false;
         for (const link of String(links).split(', ')) {
             const token = this.get_token(link, module);
             if (!token) {
+                continue;
+            }
+            if (token in this.destinations) {
+                resolved = true;
                 continue;
             }
             if (!(token in this.links)) {
                 this.links[token] = [];
                 new_links.push(link);
             }
-            this.links[token].push({"id": id, "link": link});
+            this.links[token].push({"id": id, "module": module, "link": link});
+        }
+
+        if (resolved) {
+            await db.items.where("id").equals(id).modify(item => {
+                item.data.final_link = this.get_final_link(item.data.link, module);
+            });
         }
         return new_links;
+    },
+
+    /**
+     * Queue the redirect links captured earlier that are not resolved yet
+     *
+     * Called when resolving is turned on, so that results captured before
+     * that are resolved too, unless they have been cleared since. Links that
+     * were skipped after unexpected answers are not tried again.
+     */
+    enqueue_captured: async function () {
+        for (const token of Object.keys(this.links)) {
+            const ids = this.links[token].map(redirect => redirect.id);
+            const exists = await db.items.where("id").anyOf(ids).count() > 0;
+            // checked after reading the database, since the link may have been resolved in the meantime
+            if (!exists || !(token in this.links) || this.queue.some(entry => this.get_token(entry.link, entry.module) === token)) {
+                continue;
+            }
+            const redirect = this.links[token][0];
+            if ((this.failures[redirect.link] || 0) < 2) {
+                this.queue.push({"module": redirect.module, "link": redirect.link});
+            }
+        }
+        await this.retry();
     },
 
     /**
@@ -264,7 +300,6 @@ window.zoekplaatje.redirects = {
      */
     clear: function () {
         this.queue = [];
-        this.failures = {};
         this.blocked = null;
         this.update_badge();
     },
@@ -384,7 +419,12 @@ browser.webNavigation.onCompleted.addListener((details) => {
 });
 
 browser.storage.onChanged.addListener((changes) => {
-    if ('zs-resolve-links' in changes && !parseInt(changes['zs-resolve-links'].newValue)) {
+    if (!('zs-resolve-links' in changes)) {
+        return;
+    }
+    if (parseInt(changes['zs-resolve-links'].newValue)) {
+        zoekplaatje.redirects.enqueue_captured();
+    } else {
         zoekplaatje.redirects.clear();
     }
 });
