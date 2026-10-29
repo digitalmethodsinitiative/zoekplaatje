@@ -9,7 +9,9 @@ window.db.version(1).stores({
 window.zoekplaatje = {
     modules: {},
     session: null,
+    ready: null,
     tab_url_map: {},
+    nav_index: {},
 
     /**
      * Register module
@@ -109,14 +111,11 @@ window.zoekplaatje = {
      * @param tabId  ID of the tab in which the request was captured
      */
     parse_request: async function (response, source_platform_url, source_url, tabId) {
+        // the session is read from the database at startup
+        await this.ready;
+
         if (!source_platform_url) {
             source_platform_url = source_url;
-        }
-
-        // what url was loaded in the tab the previous time?
-        let old_url = '';
-        if (tabId in this.tab_url_map) {
-            old_url = this.tab_url_map[tabId];
         }
 
         try {
@@ -132,21 +131,16 @@ window.zoekplaatje = {
         // sometimes the tab URL changes without triggering a webNavigation
         // event! so check if the URL changes, and then increase the nav
         // index *as if* an event had triggered if it does
-        if (old_url && source_platform_url !== old_url) {
-            await zoekplaatje.nav_handler(tabId);
-        }
-
+        // read and update the URL with no await in between: the responses of
+        // one page are parsed at the same time, and only one may count the change
+        const old_url = this.tab_url_map[tabId];
         this.tab_url_map[tabId] = source_platform_url;
-
-        // get the navigation index for the tab
-        // if any of the processed items already exist for this combination of
-        // navigation index and tab ID, it is ignored as a duplicate
-        let nav_index = await db.nav.where({"tab_id": tabId, "session": this.session}).first();
-        if (!nav_index) {
-            nav_index = {"tab_id": tabId, "session": this.session, "index": 0};
-            await db.nav.add(nav_index);
+        if (old_url && source_platform_url !== old_url) {
+            this.nav_handler(tabId);
         }
-        nav_index = nav_index.session + ":" + nav_index.tab_id + ":" + nav_index.index;
+
+        // the navigation index tells which page view an item was captured on
+        const nav_index = this.session + ":" + tabId + ":" + (this.nav_index[tabId] || 0);
 
         let item_list = [];
         for (let module in this.modules) {
@@ -157,30 +151,30 @@ window.zoekplaatje = {
                 continue;
             }
             // get items from module parser (will often be an empty list)
-            item_list = this.modules[module].callback(response, source_platform_url, source_url, nav_index);
+            // a module that fails on a response must not stop the other modules
+            try {
+                item_list = this.modules[module].callback(response, source_platform_url, source_url, nav_index);
+            } catch (error) {
+                console.error(`Zoekplaatje module ${module} could not parse ${source_url}`, error);
+                continue;
+            }
             if (item_list && item_list.length > 0) {
+                // one time for all items of a response, so that the rows of one
+                // page have the same timestamp in the export
+                const timestamp_collected = Date.now();
                 let redirect_links = [];
-                await Promise.all(item_list.map(async (item) => {
-                    if (!item) {
-                        return;
-                    }
-
-                    let item_id = item["id"];
-                    let exists = await db.items.where({"item_id": item_id, "nav_index": nav_index}).first();
-
-                    if (!exists) {
-                        const id = await db.items.add({
-                            "nav_index": nav_index,
-                            "item_id": item_id,
-                            "timestamp_collected": Date.now(),
-                            "source_platform": module,
-                            "source_platform_url": source_platform_url,
-                            "source_url": source_url,
-                            "user_agent": navigator.userAgent,
-                            "data": item
-                        });
-                        redirect_links.push(...zoekplaatje.redirects.register(module, id, item["link"]));
-                    }
+                await Promise.all(item_list.filter(item => item).map(async (item) => {
+                    const id = await db.items.add({
+                        "nav_index": nav_index,
+                        "item_id": item["id"],
+                        "timestamp_collected": timestamp_collected,
+                        "source_platform": module,
+                        "source_platform_url": source_platform_url,
+                        "source_url": source_url,
+                        "user_agent": navigator.userAgent,
+                        "data": item
+                    });
+                    redirect_links.push(...zoekplaatje.redirects.register(module, id, item["link"]));
                 }));
 
                 await zoekplaatje.redirects.enqueue(module, tabId, redirect_links);
@@ -204,33 +198,30 @@ window.zoekplaatje = {
 
     /**
      * Callback for browser navigation
-     * Increases the nav_index for a given tab to aid in deduplication of captured items
+     * Increases the nav_index for a given tab, so that items of different
+     * page views have a different nav_index
      * @param tabId  Tab ID to update nav index for
      */
-    nav_handler: async function (tabId) {
-        if (tabId.hasOwnProperty("tabId")) {
-            tabId = tabId.tabId;
-        }
-
-        let nav = await db.nav.where({"session": this.session, "tab_id": tabId});
-        if (!nav) {
-            nav = {"session": this.session, "tab_id": tabId, "index": 0}
-            await db.nav.add(nav);
-        }
-
-        await db.nav.where({"session": this.session, "tab_id": tabId}).modify({"index": nav["index"] + 1});
+    nav_handler: function (tabId) {
+        this.nav_index[tabId] = (this.nav_index[tabId] || 0) + 1;
     }
 }
 
-zoekplaatje.init();
+zoekplaatje.ready = zoekplaatje.init();
 
 browser.webRequest.onBeforeRequest.addListener(
     zoekplaatje.listener, {urls: ["https://*/*"], types: ["main_frame", "xmlhttprequest", "script"]}, ["blocking"]
 );
 
-browser.webNavigation.onCommitted.addListener(
-    zoekplaatje.nav_handler
-);
+browser.webNavigation.onCommitted.addListener((details) => {
+    // only the top frame starts a new page: frames (e.g. ads) also commit
+    if (details.frameId !== 0) {
+        return;
+    }
+    // the URL change is counted here, so parse_request must not count it again
+    zoekplaatje.tab_url_map[details.tabId] = details.url;
+    zoekplaatje.nav_handler(details.tabId);
+});
 
 browser.browserAction.onClicked.addListener(async () => {
     let tab = await zoekplaatje.has_tab();

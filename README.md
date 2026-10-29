@@ -41,6 +41,9 @@ background. You can then download the results as a .csv file with the button in 
 want to inspect the results. Make sure to cross-reference the results with what you see in your browser, at least 
 initially, to understand what data is (and is not!) collected and how it is parsed.
 
+The .csv file uses UTF-8. The `timestamp` column gives the time of capture in UTC, as `YYYY-MM-DD HH:MM:SS`. Values 
+are written as they were captured, so a spreadsheet program may run a value that starts with `=` as a formula.
+
 ### Hidden Google result links
 Google sometimes hides where its results lead: instead of linking to a result directly, it links to a redirect on its 
 own domain with an encrypted token (`https://www.google.com/goto?url=CAES...`). This mostly seems to happen in fresh or 
