@@ -83,22 +83,12 @@ zoekplaatje.register_module(
         }
 
         // google sometimes wraps result links in a redirect via its own domain, e.g. when using a fresh or
-        // logged-out browser profile. /url? redirects include the destination as a parameter, but /goto?url=
-        // links only contain an encrypted token that google resolves when the link is opened, so the
-        // destination is not in the page at all. keep those as absolute URLs so they can be resolved later.
-        const redirect_link = /^(https?:\/\/[^\/]*google\.[^\/]+)?\/(url|goto)\?/;
+        // logged-out browser profile. links are kept as google serves them, and final_link records where they
+        // lead as far as that is known (see the redirect functions at the end of this file)
+        const google_redirects = zoekplaatje.modules['google.com'].redirects;
 
-        function unwrap_link(link) {
-            if (!redirect_link.test(link)) {
-                return link;
-            }
-            const url = new URL(link, 'https://' + domain);
-            for (const param of ['q', 'url']) {
-                if (url.searchParams.has(param) && url.searchParams.get(param).indexOf('http') === 0) {
-                    return url.searchParams.get(param);
-                }
-            }
-            return url.href;
+        function absolute_link(link) {
+            return /^\/(url|goto)\?/.test(link) ? 'https://' + domain + link : link;
         }
 
         function domain_from_cite(cite) {
@@ -248,7 +238,7 @@ zoekplaatje.register_module(
                     }
                 } else if (gemini_item.matches('div[data-subtree="msc"]')) {
                     // Gemini links
-                    const gemini_links_tmp = Array.from(gemini_item.querySelectorAll('a')).map(a => unwrap_link(a.getAttribute('href').split('#:~:text')[0]))
+                    const gemini_links_tmp = Array.from(gemini_item.querySelectorAll('a')).map(a => absolute_link(a.getAttribute('href').split('#:~:text')[0]))
                     if (gemini_links_tmp.length > 0) {
                         gemini_links = gemini_links_tmp  // These are always complete, so we can just store them
                     }
@@ -290,7 +280,8 @@ zoekplaatje.register_module(
                     title: '',
                     published: '',
                     description: '',
-                    link: ''
+                    link: '',
+                    final_link: ''
                 };
 
                 // todo: for some reason, the whole #rhs knowledge graph side bar gets selected sometimes, probably
@@ -813,12 +804,13 @@ zoekplaatje.register_module(
                     parsed_item['section'] = 'top';
                 }
 
-                parsed_item['link'] = unwrap_link(parsed_item['link']);
-                if (redirect_link.test(parsed_item['link'])) {
+                parsed_item['link'] = absolute_link(parsed_item['link']);
+                parsed_item['final_link'] = google_redirects.get_final_link(parsed_item['link']);
+                if (google_redirects.get_redirect_token(parsed_item['link'])) {
                     // destination is hidden, so use the URL google displays with the result instead
                     parsed_item['domain'] = domain_from_cite(item.querySelector('cite'));
                 } else {
-                    parsed_item['domain'] = parsed_item['link'].indexOf('http') === 0 ? parsed_item['link'].split('/')[2] : '';
+                    parsed_item['domain'] = parsed_item['final_link'].indexOf('http') === 0 ? parsed_item['final_link'].split('/')[2] : '';
                 }
                 index += 1;
 
@@ -836,6 +828,8 @@ zoekplaatje.register_module(
         // AI overview content are loaded later, and we have to wait for the responses,
         // so it unfortunately often has to be added later and be positioned as the last item.
         if (gemini_text.length > 0) {
+            // only known if it is known for all of the links
+            const gemini_final_links = gemini_links.map(link => google_redirects.get_final_link(link));
             let result_gemini = [{
                     id: now.format('x') + '-' + index,
                     timestamp: now.format('YYYY-MM-DD hh:mm:ss'),
@@ -846,6 +840,7 @@ zoekplaatje.register_module(
                     title: '',
                     description: gemini_text.join(" "),
                     link: gemini_links.join(", "),
+                    final_link: gemini_final_links.includes('') ? '' : gemini_final_links.join(", "),
                     section: 'top'
             }]
             results = result_gemini.concat(results)
@@ -858,14 +853,17 @@ zoekplaatje.register_module(
 
     },
     {
+        // google's own domains, e.g. www.google.com, www.google.co.uk or google.nl
+        hostname: /(^|\.)google\.(com?\.)?[a-z]{2,3}$/,
+
         get_redirect_token: function (link) {
             // google sometimes hides where results lead behind a link to its own domain with an encrypted
             // token (e.g. https://www.google.com/goto?url=CAES...), which only google can resolve when the
-            // link is requested. /url? links that include the destination itself are unwrapped when parsing
+            // link is requested
             try {
                 const url = new URL(link);
                 const token = url.searchParams.get('url');
-                if (/(^|\.)google(\.[a-z]+)+$/.test(url.hostname) && ['/goto', '/url'].includes(url.pathname) && token && token.indexOf('http') !== 0) {
+                if (this.hostname.test(url.hostname) && ['/goto', '/url'].includes(url.pathname) && token && token.indexOf('http') !== 0) {
                     return token;
                 }
             } catch (e) {
@@ -873,9 +871,32 @@ zoekplaatje.register_module(
             }
             return null;
         },
+        get_final_link: function (link) {
+            // where a link leads, as far as the link itself tells: /url? redirects include the destination,
+            // but /goto? links hide it (see get_redirect_token), so then it is not known yet
+            try {
+                const url = new URL(link);
+                if (this.hostname.test(url.hostname) && ['/goto', '/url'].includes(url.pathname)) {
+                    for (const param of ['q', 'url']) {
+                        if ((url.searchParams.get(param) || '').indexOf('http') === 0) {
+                            return url.searchParams.get(param);
+                        }
+                    }
+                    return '';
+                }
+            } catch (e) {
+                // not a valid URL, e.g. no link at all
+            }
+            return link;
+        },
         is_captcha: function (url) {
-            // google redirects to a CAPTCHA at /sorry/ when it suspects automated traffic
-            return /^https:\/\/[^\/]*google\.[^\/]+\/sorry\//.test(url);
+            // google redirects to a CAPTCHA at /sorry/ on its own domain when it suspects automated traffic
+            try {
+                const parsed = new URL(url);
+                return this.hostname.test(parsed.hostname) && parsed.pathname.indexOf('/sorry/') === 0;
+            } catch (e) {
+                return false;
+            }
         }
     }
 );

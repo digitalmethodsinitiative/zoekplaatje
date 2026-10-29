@@ -172,7 +172,7 @@ function update_resolve_status() {
     if (message.textContent !== status.message) {
         message.textContent = status.message;
     }
-    container.querySelector('#resolve-retry').setAttribute('aria-hidden', ['waiting', 'captcha'].includes(status.state) ? 'false' : 'true');
+    container.querySelector('#resolve-retry').setAttribute('aria-hidden', ['waiting', 'captcha', 'unexpected'].includes(status.state) ? 'false' : 'true');
 }
 
 /**
@@ -285,7 +285,7 @@ function export_row(item) {
  * Fields that most modules write, in the order of the Google module. Exports
  * put these first, so that a column keeps its place whichever row comes first.
  */
-const COMMON_FIELDS = ['id', 'timestamp', 'source', 'query', 'type', 'domain', 'title', 'published', 'description', 'link', 'section'];
+const COMMON_FIELDS = ['id', 'timestamp', 'source', 'query', 'type', 'domain', 'title', 'published', 'description', 'link', 'final_link', 'section'];
 
 function get_headers(results) {
     // rows of one engine can have different fields, so use the fields of all

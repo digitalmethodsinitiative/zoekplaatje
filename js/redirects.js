@@ -5,17 +5,20 @@
  * encrypted token that only the engine itself can resolve (e.g. Google's
  * /goto?url=CAES... links). Modules recognise these links with the redirect
  * functions they register (see register_module). Captured redirect links are
- * remembered here, so the captured items can be updated once it is known where
- * the links lead: when the user clicks a result, or when the links are resolved
- * automatically (if enabled in the interface).
+ * remembered here, so that the final_link of the captured items can be filled
+ * in once it is known where the links lead: when the user clicks a result, or
+ * when the links are resolved automatically (if enabled in the interface). The
+ * captured link itself is never changed.
  *
  * Links are resolved from an open result page on the same site. When the
- * search engine asks for a CAPTCHA, resolving stops until the user has solved
- * it, which is assumed once results from that engine are captured again, or
- * when the user clicks 'Try again' in the interface.
+ * search engine asks for a CAPTCHA, or answers in an unexpected way, resolving
+ * stops until results from that engine are captured again, or until the user
+ * clicks 'Try again' in the interface.
  */
 window.zoekplaatje.redirects = {
     links: {},
+    destinations: {},
+    failures: {},
     queue: [],
     resolving: false,
     blocked: null,
@@ -28,8 +31,39 @@ window.zoekplaatje.redirects = {
      * @returns {string|null}  Token, or null if this is not a redirect link
      */
     get_token: function (link, module) {
-        const get_redirect_token = zoekplaatje.modules[module].redirects.get_redirect_token;
-        return get_redirect_token ? get_redirect_token(link) : null;
+        const handlers = zoekplaatje.modules[module].redirects;
+        return handlers.get_redirect_token ? handlers.get_redirect_token(link) : null;
+    },
+
+    /**
+     * Check if a URL is a search engine's CAPTCHA page
+     *
+     * @param url  URL to check
+     * @param module  Module of the search engine
+     * @returns {boolean}
+     */
+    is_captcha: function (url, module) {
+        const handlers = zoekplaatje.modules[module].redirects;
+        return handlers.is_captcha ? handlers.is_captcha(url) : false;
+    },
+
+    /**
+     * Get where the link(s) of an item lead, as far as known
+     *
+     * @param links  Link(s) of the item, comma-separated if more than one
+     * @param module  Module the item was captured with
+     * @returns {string}  Final link(s), or an empty string if not known for all links
+     */
+    get_final_link: function (links, module) {
+        const handlers = zoekplaatje.modules[module].redirects;
+        const final_links = String(links).split(', ').map(link => {
+            const token = this.get_token(link, module);
+            if (token) {
+                return this.destinations[token] || '';
+            }
+            return handlers.get_final_link ? handlers.get_final_link(link) : link;
+        });
+        return final_links.includes('') ? '' : final_links.join(', ');
     },
 
     /**
@@ -62,14 +96,14 @@ window.zoekplaatje.redirects = {
      * Queue redirect links to be resolved, if enabled
      *
      * Called whenever a module has captured results, which also means its
-     * search engine is not asking for a CAPTCHA (anymore).
+     * search engine is answering normally (again).
      *
      * @param module  Module the links were captured with
      * @param tabId  ID of the tab the links were captured in
      * @param links  Redirect links
      */
     enqueue: async function (module, tabId, links) {
-        if (this.blocked === module) {
+        if (this.blocked && this.blocked.module === module) {
             this.blocked = null;
         }
 
@@ -114,37 +148,96 @@ window.zoekplaatje.redirects = {
                 break;
             }
 
-            const is_captcha = zoekplaatje.modules[entry.module].redirects.is_captcha;
-            if (is_captcha && is_captcha(tab.url)) {
+            if (this.is_captcha(tab.url, entry.module)) {
                 // the tab itself shows a CAPTCHA, so requests would be blocked too
-                this.blocked = entry.module;
+                this.pause_for_captcha(entry.module, null);
                 break;
             }
 
-            let requested;
+            let answer;
             try {
-                // content.fetch makes the request as if from the page (Firefox, manifest v2 only)
-                requested = await browser.tabs.executeScript(tabId, {
-                    code: "location.hostname === " + JSON.stringify(hostname) + " && content.fetch(" + JSON.stringify(entry.link) + ", {redirect: 'manual'}).then(() => true, () => true)"
+                // content.fetch makes the request as if from the page (Firefox, manifest v2 only). The page
+                // can tell a redirect from other answers, but not where it leads; the redirect listener
+                // records that
+                const result = await browser.tabs.executeScript(tabId, {
+                    code: "location.hostname === " + JSON.stringify(hostname) + " && content.fetch(" + JSON.stringify(entry.link) + ", {redirect: 'manual'})" +
+                        ".then(response => response.type === 'opaqueredirect' ? 'redirect' : 'HTTP ' + response.status, () => 'a network error')"
                 });
+                answer = result[0];
             } catch (e) {
-                requested = [false];
+                answer = false;
             }
 
-            if (!requested[0] || this.blocked) {
-                // tab navigated away in the meantime, or the search engine asks for a CAPTCHA (in which case the
-                // redirect listener keeps the link queued)
+            if (!answer) {
+                // tab navigated away in the meantime
+                break;
+            } else if (answer === 'HTTP 429') {
+                this.pause_for_captcha(entry.module, entry.link);
+            } else if (answer !== 'redirect') {
+                this.unexpected(entry.module, entry.link, answer);
+            } else if (!this.blocked) {
+                // the redirect listener has removed the link from the queue already if it was resolved, or
+                // keeps it queued if the redirect was not as expected
+                this.queue = this.queue.filter(queued => queued !== entry);
+            }
+
+            this.update_badge();
+            if (this.blocked) {
                 break;
             }
-
-            // if the link was resolved, the redirect listener has removed it from the queue already; if not,
-            // it cannot be resolved, so stop trying
-            this.queue = this.queue.filter(queued => queued !== entry);
-            this.update_badge();
             await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
         }
         this.resolving = false;
         this.update_badge();
+    },
+
+    /**
+     * Stop resolving until the search engine's CAPTCHA has been solved
+     *
+     * @param module  Module of the search engine
+     * @param link  Link that was being resolved, to try again later, or null
+     */
+    pause_for_captcha: function (module, link) {
+        this.blocked = {"module": module, "reason": "captcha", "answer": ""};
+        if (link) {
+            this.requeue(module, link);
+        }
+        this.update_badge();
+    },
+
+    /**
+     * Handle an unexpected answer to a lookup
+     *
+     * The first time a link gets one, resolving stops, since it is not clear
+     * what the search engine is doing. The second time, the link is skipped,
+     * so its final_link stays empty.
+     *
+     * @param module  Module of the search engine
+     * @param link  Link that was being resolved
+     * @param answer  What the search engine answered
+     */
+    unexpected: function (module, link, answer) {
+        console.warn("Zoekplaatje could not resolve " + link + ": unexpected answer (" + answer + ")");
+        this.failures[link] = (this.failures[link] || 0) + 1;
+        if (this.failures[link] >= 2) {
+            this.queue = this.queue.filter(entry => entry.link !== link);
+        } else {
+            this.blocked = {"module": module, "reason": "unexpected", "answer": answer};
+            this.requeue(module, link);
+        }
+        this.update_badge();
+    },
+
+    /**
+     * Put a link back at the front of the queue, unless it is queued already
+     *
+     * @param module  Module the link was captured with
+     * @param link  Redirect link
+     */
+    requeue: function (module, link) {
+        if (!this.queue.some(entry => entry.link === link)) {
+            this.queue.unshift({"module": module, "link": link});
+        }
     },
 
     /**
@@ -171,6 +264,7 @@ window.zoekplaatje.redirects = {
      */
     clear: function () {
         this.queue = [];
+        this.failures = {};
         this.blocked = null;
         this.update_badge();
     },
@@ -180,7 +274,7 @@ window.zoekplaatje.redirects = {
      *
      * @returns {{state: string, outstanding: number, message: string}}  State
      * is 'idle', 'resolving', 'waiting' (for a result page to resolve links
-     * from) or 'captcha'; message explains it to the user
+     * from), 'captcha' or 'unexpected'; message explains it to the user
      */
     get_status: function () {
         const outstanding = this.queue.length;
@@ -192,10 +286,15 @@ window.zoekplaatje.redirects = {
         if (outstanding === 0) {
             state = 'idle';
             message = '';
-        } else if (this.blocked) {
-            const engine = zoekplaatje.modules[this.blocked].name;
+        } else if (this.blocked && this.blocked.reason === 'captcha') {
+            const engine = zoekplaatje.modules[this.blocked.module].name;
             state = 'captcha';
             message = engine + ' is asking for a CAPTCHA, so ' + links + ' ' + are + ' not resolved yet. Reload a ' + engine + ' search and solve the CAPTCHA to continue.';
+        } else if (this.blocked) {
+            const engine = zoekplaatje.modules[this.blocked.module].name;
+            const answer = this.blocked.answer.length > 100 ? this.blocked.answer.substring(0, 100) + '...' : this.blocked.answer;
+            state = 'unexpected';
+            message = engine + ' answered a lookup unexpectedly (' + answer + '), so ' + links + ' ' + are + ' not resolved yet. Reload a ' + engine + ' search or click Try again in the Zoekplaatje interface to continue.';
         } else if (this.resolving) {
             state = 'resolving';
             message = 'Resolving ' + links + '. Keep a ' + engines + ' result page open until this is done.';
@@ -210,11 +309,11 @@ window.zoekplaatje.redirects = {
      * Show the status on the toolbar button
      *
      * The number of links still to be resolved, in orange when waiting for a
-     * result page and in red when waiting for a CAPTCHA to be solved.
+     * result page and in red when the search engine needs attention.
      */
     update_badge: function () {
         const status = this.get_status();
-        const colors = {"idle": "#3b4152", "resolving": "#3b4152", "waiting": "#b06a00", "captcha": "#b3261e"};
+        const colors = {"idle": "#3b4152", "resolving": "#3b4152", "waiting": "#b06a00", "captcha": "#b3261e", "unexpected": "#b3261e"};
         browser.browserAction.setBadgeText({"text": status.outstanding > 0 ? String(status.outstanding) : ""});
         browser.browserAction.setBadgeBackgroundColor({"color": colors[status.state]});
         browser.browserAction.setTitle({"title": status.message ? "Zoekplaatje: " + status.message : "Zoekplaatje"});
@@ -243,33 +342,31 @@ window.zoekplaatje.redirects = {
         }
 
         const token = redirects.get_token(details.url, module);
-        const is_captcha = zoekplaatje.modules[module].redirects.is_captcha;
+        const link = redirects.links[token][0].link;
+        // while resolving, this is (most likely) one of our lookups rather than the user clicking a result
+        const lookup = redirects.resolving;
         const location_header = details.responseHeaders.find(header => header.name.toLowerCase() === 'location');
         const destination = location_header ? new URL(location_header.value, details.url).href : '';
-        if (details.statusCode === 429 || (is_captcha && is_captcha(destination))) {
-            // the search engine wants a CAPTCHA solved; stop resolving until the user has done so, and if
-            // this link was being resolved, keep it queued to try again then
-            redirects.blocked = module;
-            const link = redirects.links[token][0].link;
-            if (redirects.resolving && !redirects.queue.some(entry => entry.link === link)) {
-                redirects.queue.unshift({"module": module, "link": link});
-            }
-            redirects.update_badge();
+
+        if (details.statusCode === 429 || redirects.is_captcha(destination, module)) {
+            redirects.pause_for_captcha(module, lookup ? link : null);
             return;
-        } else if (!destination) {
+        } else if (!destination || new URL(destination).hostname === new URL(details.url).hostname) {
+            // a redirect back to the search engine itself is not where the result leads
+            if (lookup) {
+                redirects.unexpected(module, link, destination ? 'a redirect to ' + destination : 'a redirect without destination');
+            }
             return;
         }
 
-        // no need to resolve this link anymore if it was still queued
+        // record where the link leads, and do not resolve it again if it was still queued
+        redirects.destinations[token] = destination;
         redirects.queue = redirects.queue.filter(entry => redirects.get_token(entry.link, entry.module) !== token);
         redirects.update_badge();
 
         for (const redirect of redirects.links[token]) {
             await db.items.where("id").equals(redirect.id).modify(item => {
-                if (item.data.link === redirect.link) {
-                    item.data.domain = destination.split('/')[2];
-                }
-                item.data.link = item.data.link.replace(redirect.link, () => destination);
+                item.data.final_link = redirects.get_final_link(item.data.link, module);
             });
         }
         delete redirects.links[token];
