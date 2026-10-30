@@ -58,7 +58,7 @@
     // panels that list people, players, dramas, stocks and similar: the type of their items
     const LIST_PANELS = {
         'same-name-people': 'person', 'smart-block': 'smart-block-item', 'ranking': 'ranking-item',
-        'related-stocks': 'asset', 'popular-stocks': 'asset', 'etf-list': 'etf'
+        'related-stocks': 'asset', 'popular-stocks': 'asset'
     };
 
     /**
@@ -167,6 +167,14 @@
 
     function number(value) {
         return parseInt(String(value).replace(/,/g, ''));
+    }
+
+    /**
+     * A count as Naver shows it: "3,244", or with 만 (10,000), for example "1.3만"
+     */
+    function korean_count(value) {
+        const match = String(value).replace(/,/g, '').match(/([\d.]+)\s*(만)?/);
+        return match ? Math.round(parseFloat(match[1]) * (match[2] ? 10000 : 1)) : undefined;
     }
 
     function absolute(link, base) {
@@ -726,11 +734,16 @@
         const items = Array.from(element.querySelectorAll('li')).filter(item =>
             item.querySelector('a[href*="map.naver.com"], a[href*="place.naver.com"]') && !item.querySelector('li'));
         return parse_each(items, item => {
-            // the first place link with text; the photo before it links to the place too
+            // the first place link with text; the photos before it link to the place too, some
+            // with the number of photos as text ("이미지수 8")
             const links = Array.from(item.querySelectorAll('a[href*="map.naver.com"], a[href*="place.naver.com"]'));
-            const link = links.find(a => text_of(a)) || links[0];
-            // the name link holds the name, icons (reservation, coupon) and the category, in that order
-            const parts = Array.from(link.children).filter(child => child.tagName === 'SPAN' && !child.querySelector('span, svg') && text_of(child)).map(child => text_of(child));
+            const link = links.find(a => text_of(a) && !/(^|\s)place_thumb(\s|$)/.test(a.getAttribute('class') || '')) || links[0];
+            // the name link holds the name, icons (reservation, coupon) and the category, in that order.
+            // In the recommendations (함께 가볼만한 장소) the parts are deeper: name, category, area
+            let parts = Array.from(link.children).filter(child => child.tagName === 'SPAN' && !child.querySelector('span, svg') && text_of(child)).map(child => text_of(child));
+            if (!parts.length) {
+                parts = Array.from(link.querySelectorAll('span')).filter(span => !span.querySelector('span, svg') && text_of(span)).map(span => text_of(span)).slice(0, 2);
+            }
             const name = parts[0] || text_of(link);
             // the heading part of the item; the photos and reviews below it are left out
             const heading = Array.from(item.children).find(child => child.contains(link)) || item;
@@ -746,7 +759,7 @@
                     category: parts.length > 1 ? parts[parts.length - 1] : undefined,
                     status: first_match(words, [/(곧 영업 종료|곧 영업 시작|영업 중|영업 종료|영업 전|브레이크타임|24시간 영업|정기휴무|휴무)/]),
                     rating: first_match(words, [/별점\s*(\d+(?:\.\d+)?)/, /(\d\.\d+)\s*별점/], parseFloat),
-                    reviews: first_match(words, [/리뷰\s*([\d,]+)/], number),
+                    reviews: first_match(words, [/리뷰\s*([\d,.]+\s*만?)/], korean_count),
                     phone: first_match(words, [/(0\d{1,4}-\d{3,4}-\d{4})/]),
                     distance_from_current_location: first_match(words, [/현재 위치에서\s*([\d.,]+\s*k?m)/])
                 }
@@ -809,6 +822,78 @@
                 // the line under the name, or the price and its change (stocks)
                 description: text_of(item.querySelector('.sub_text, .desc, .price_box, .price_area'), {words: true}),
                 extra: {change: /(^|\s)up(\s|$)/.test(item.getAttribute('class') || '') ? 'up' : /(^|\s)down(\s|$)/.test(item.getAttribute('class') || '') ? 'down' : undefined}
+            });
+        });
+    }
+
+    /**
+     * Items of finance blocks: discussion posts (토론방, of stocks or from
+     * CoinMarketCap for coins), expert content (전문 콘텐츠) and ETFs
+     */
+    function finance_rows(page, block, element) {
+        let rank = 0;
+        const row = fields => fields ? make_row(page, block, ++rank, fields) : null;
+        if (block.type === 'discussion-posts') {
+            return parse_each(element.querySelectorAll('a.link_discussion, a.newsgroup_box'), post => {
+                const text = text_of(post.querySelector('.text'));
+                const profile = text_of(post.querySelector('.profile'), {words: true});
+                const date = first_match(profile, [/(\d{4}\.\d{2}\.\d{2}\.?)/]) || '';
+                const counts = Array.from(post.querySelectorAll('.num')).map(num => number(text_of(num)));
+                return row(text ? {
+                    type: 'discussion-post',
+                    // posts from CoinMarketCap have no title: the start of the text instead
+                    title: text_of(post.querySelector('.tit')) || text.slice(0, 80),
+                    link: absolute(post.getAttribute('href'), page.url),
+                    description: text.slice(0, 500),
+                    publisher: (profile.replace(date, '').trim() || text_of(post.querySelector('span'))).slice(0, 60),
+                    published: date,
+                    extra: {likes: counts.length > 1 ? counts[0] : undefined, comments: counts.length > 1 ? counts[1] : undefined}
+                } : null);
+            });
+        } else if (block.type === 'expert-content') {
+            return parse_each(element.querySelectorAll('a[href]'), card => {
+                const summary = card.querySelector('.card_text');
+                const badge = text_of(card.querySelector('.badge_new'));
+                return row(summary ? {
+                    type: 'expert-article',
+                    // without the "NEW" badge in the title line
+                    title: text_of(card.querySelector('.inline')).replace(new RegExp(badge ? badge + '$' : '^$'), '').trim(),
+                    link: absolute(card.getAttribute('href'), page.url),
+                    description: text_of(summary),
+                    publisher: text_of(card.querySelector('.origin')),
+                    published: text_of(card.querySelector('.time')),
+                    extra: {new: card.querySelector('.badge_new') ? true : undefined}
+                } : null);
+            });
+        }
+        // ETFs: one list item for each fund, with its price link
+        return parse_each(element.querySelectorAll('li'), item => {
+            const name = item.querySelector('.tit');
+            const price = item.querySelector('.price_text');
+            if (!name || !price || item.querySelector('li')) {
+                return null;
+            }
+            const own_text = element => element ? Array.from(element.childNodes).filter(node => node.nodeType === 3).map(node => node.nodeValue).join('').trim() : '';
+            // the code of a Korean fund (0193W0), or the full name of a foreign one (iShares Bitcoin Trust ETF)
+            const code = own_text(item.querySelector('.stock_code'));
+            const price_area = item.querySelector('.price_wrap') || price;
+            const labels = text_of(price_area, {labels: true});
+            return row({
+                type: 'etf',
+                title: text_of(name),
+                link: absolute((name.closest('a[href]') || item.querySelector('a[href]')).getAttribute('href'), page.url),
+                domain: '',
+                description: text_of(price_area, {words: true}),
+                extra: {
+                    code: /^[0-9A-Z]{4,8}$/.test(code) ? code : undefined,
+                    full_name: code && !/^[0-9A-Z]{4,8}$/.test(code) ? code : undefined,
+                    weight: first_match(text_of(item.querySelector('.stock_per')), [/([\d.]+%)/]),
+                    price: own_text(price) || undefined,
+                    change: text_of(price_area.querySelector('.num')) || undefined,
+                    change_percent: first_match(text_of(price_area.querySelector('.per')), [/([-+]?[\d.]+%)/]),
+                    direction: /(^|\s)down(\s|$)/.test(item.getAttribute('class') || '') || /하락/.test(labels) ? 'down'
+                        : /(^|\s)up(\s|$)/.test(item.getAttribute('class') || '') || /상승/.test(labels) ? 'up' : undefined
+                }
             });
         });
     }
@@ -918,7 +1003,7 @@
             if (block.type === 'related-queries') {
                 // the items arrive later with their own request, and not on every
                 // page view; remember the block, and give it a row of its own
-                pages[page.id] = Object.assign(pages[page.id] || {}, {related_queries: {...block, element: null}});
+                remember_block(page, 'related-queries', block, []);
                 return [make_row(page, block, 0, {title: block.title, description: 'The items of this block load with a separate request.'})];
             }
             const rows = fender_rows(page, block, block.json);
@@ -941,6 +1026,16 @@
             // tickets of a place (예매), for example an amusement park
             block.type = 'place-tickets';
             rows = link_list_rows(page, block, element, 'ticket', 'booking.naver.com');
+        } else if (element.querySelector('.place_pcnx_detail')) {
+            // one place (for example an amusement park), with its reviews: no list of places
+            block.type = 'place-detail';
+            const name = Array.from(element.querySelectorAll('a[href*="map.naver.com"], a[href*="place.naver.com"]'))
+                .find(a => text_of(a) && !/(^|\s)place_thumb(\s|$)/.test(a.getAttribute('class') || ''));
+            rows = [make_row(page, block, 0, {
+                title: name ? text_of(name) : block.title,
+                link: name ? absolute(name.getAttribute('href'), page.url) : '',
+                description: text_of(element).slice(0, 1000)
+            })];
         } else if (element.id === 'place-app-root' || /플레이스/.test(block.title)) {
             block.type = 'places';
             rows = place_rows(page, block, element);
@@ -983,6 +1078,8 @@
                     rank++;
                     return make_row(page, block, rank, {type: 'brand-link', title: title, link: href, is_ad: true});
                 });
+            } else if (['discussion-posts', 'expert-content', 'etf-list'].includes(block.type)) {
+                rows = finance_rows(page, block, element);
             } else if (block.type === 'hotels') {
                 rows = link_list_rows(page, block, element, 'hotel', 'hotels.naver.com');
             } else if (block.type === 'ai-issue-briefing') {
@@ -1009,34 +1106,202 @@
                 is_ad: block.type === 'ads' || !!block.is_ad
             })];
         }
+        // blocks whose items come later, with their own request
+        const lounge = block.type === 'open-talk' && (element.getAttribute('class') || '').match(/_opentalk_(\w+)/);
+        const later_key = lounge ? 'lounge:' + lounge[1].toLowerCase() : LATER_BLOCKS[block.type];
+        if (later_key) {
+            remember_block(page, later_key, block, rows);
+        }
         return rows;
+    }
+
+    // panels that get their items from a later request: the key of the request
+    const LATER_BLOCKS = {'travel-destination': 'travel', 'sports-schedule': 'sports', 'exchange-rate': 'exchange-rate'};
+
+    /**
+     * Remember a block whose items come later, with their own request, so that
+     * those rows get the rank of the block. Their items count on after the
+     * items of the block on the page.
+     */
+    function remember_block(page, key, block, rows) {
+        const state = pages[page.id] = pages[page.id] || {};
+        state.later = state.later || {};
+        state.later[key] = {
+            ...block, element: null, page: page, seen: new Set(),
+            next_rank: rows.reduce((max, row) => Math.max(max, row.item_rank), 0) + 1
+        };
+    }
+
+    /**
+     * Rows of a later request for a remembered block. An item that came before
+     * for the same page view (for example the same request twice) is left out.
+     */
+    function later_rows(nav_index, key, items, map) {
+        const block = pages[nav_index] && pages[nav_index].later && pages[nav_index].later[key];
+        if (!block) {
+            return [];
+        }
+        return parse_each(items, item => {
+            const fields = map(item);
+            const seen_key = fields && (fields.key || fields.title + '|' + fields.link);
+            if (!fields || block.seen.has(seen_key)) {
+                return null;
+            }
+            block.seen.add(seen_key);
+            return make_row(block.page, block, block.next_rank++, fields);
+        });
+    }
+
+    function parse_json(response) {
+        try {
+            return JSON.parse(response);
+        } catch (e) {
+            return null;
+        }
     }
 
     /**
      * The related queries block (함께 많이 찾는), from its own request
      */
-    function related_query_rows(response, source_platform_url, nav_index) {
-        const state = pages[nav_index] && pages[nav_index].related_queries;
-        if (!state) {
+    function related_query_rows(response, nav_index) {
+        return later_rows(nav_index, 'related-queries', get(parse_json(response), 'result.contents') || [], content => ({
+            type: 'related-query',
+            title: clean(content.query || content.title),
+            link: absolute(content.href, 'https://search.naver.com/search.naver'),
+            domain: '',
+            extra: {badge: clean(get(content, 'badge.text')) || undefined}
+        }));
+    }
+
+    /**
+     * The posts of a lounge block (라운지), from its own request. The request
+     * names the channel, as the class of the block does.
+     */
+    function lounge_rows(response, url, nav_index) {
+        const data = parse_json(response);
+        const channel = (url.pathname.match(/channelId\/(\w+)/) || [])[1] || '';
+        // posts that are live now come first on the page
+        const posts = (get(data, 'data.onairPosts') || []).map(post => ({...post, on_air: true})).concat(get(data, 'data.posts') || []);
+        return later_rows(nav_index, 'lounge:' + channel.toLowerCase(), posts, post => ({
+            key: post.id,
+            type: 'lounge-post',
+            title: clean(post.title),
+            link: post.id ? 'https://lounge.naver.com/posts/' + post.id : '',
+            description: clean(post.contentPreview).slice(0, 500),
+            publisher: clean(get(post, 'persona.nickname')),
+            published: post.createTime || '',
+            extra: {
+                channel: clean(get(data, 'data.channel.name')) || undefined,
+                comments: (post.comments || []).length || undefined,
+                pinned: post.pinned || undefined,
+                on_air: post.on_air || undefined
+            }
+        }));
+    }
+
+    /**
+     * The items of a travel destination panel, from its own requests: sights
+     * and suggested courses (domestic), articles and places (overseas)
+     */
+    function travel_rows(response, nav_index) {
+        const data = get(parse_json(response), 'data') || {};
+        const items = [].concat(
+            (get(data, 'domesticSights.list') || []).map(item => ['sight', item]),
+            (get(data, 'domesticAutoCourses.courseList') || []).map(item => ['travel-course', item]),
+            (get(data, 'articles.data') || []).map(item => ['travel-article', item]),
+            (get(data, 'geoInfo.topPoi.data') || []).map(item => ['travel-place', item])
+        );
+        const names = list => (list || []).map(entry => clean(typeof entry === 'string' ? entry : entry.name || entry.nameKo || entry.tagName)).filter(name => name);
+        return later_rows(nav_index, 'travel', items, ([type, item]) => {
+            if (type === 'sight') {
+                return {key: 'sight:' + item.title + item.pcUrl, type: type, title: clean(item.title), link: item.pcUrl || '',
+                    extra: {tags: names(item.ctxTags).length ? names(item.ctxTags) : undefined}};
+            } else if (type === 'travel-course') {
+                return {
+                    key: 'course:' + item.crsId, type: type, title: clean(item.title), domain: '',
+                    description: names(item.poiList).join(' → '),
+                    extra: {days: item.period, distance: item.totalDistance || undefined, duration: item.totalTime || undefined,
+                        stops: (item.poiList || []).length || undefined, tags: names(item.tagList).length ? names(item.tagList) : undefined}
+                };
+            } else if (type === 'travel-article') {
+                return {key: 'article:' + item.cid, type: type, title: clean(item.title), link: item.pcUrl || item.url || '',
+                    publisher: clean(item.authorName), extra: {category: clean(item.type) || undefined, source: item.from || undefined}};
+            }
+            return {
+                key: 'place:' + item.geoCode, type: type, title: clean(item.nameKo || item.nameEn), domain: '',
+                description: clean(get(item, 'descriptionInfo.microReview') || get(item, 'descriptionInfo.publisher')),
+                extra: {
+                    name_en: clean(item.nameEn) || undefined, category: clean(item.mainCategory) || undefined,
+                    subcategory: names(item.subCategory).join(', ') || undefined,
+                    rating: get(item, 'reviewInfo.avgRating') || undefined, reviews: get(item, 'reviewInfo.totalCount') || undefined,
+                    saves: item.favoriteCount || undefined, geo_code: item.geoCode || undefined
+                }
+            };
+        });
+    }
+
+    /**
+     * The matches of a sports schedule panel, from its own requests: by date,
+     * and for a round of a league
+     */
+    function sports_rows(response, url, nav_index) {
+        const result = get(parse_json(response), 'result') || {};
+        const list = url.searchParams.get('scheduleType') === 'ROUND' ? ('round ' + (url.searchParams.get('value') || result.round || '')).trim() : 'by date';
+        return later_rows(nav_index, 'sports', result.schedules || [], game => {
+            const [left, right] = [game.left || {}, game.right || {}];
+            const played = ['RESULT', 'STARTED'].includes(game.status);
+            const score = played ? left.score + ':' + right.score : '';
+            return {
+                key: game.gameId,
+                type: 'match',
+                title: clean(left.name) + ' vs ' + clean(right.name),
+                link: game.url || '',
+                published: game.gameTime || game.gameDate || '',
+                description: [clean(game.statusInfo), score, clean(game.stadium)].filter(part => part).join(' · '),
+                extra: {
+                    status: game.status || undefined,
+                    home: clean((left.isHome ? left : right).name) || undefined,
+                    away: clean((left.isHome ? right : left).name) || undefined,
+                    score: score || undefined,
+                    winner: played ? game.winner : undefined,
+                    league: clean(game.categoryName) || undefined,
+                    cancelled: game.cancel || undefined,
+                    list: list
+                }
+            };
+        });
+    }
+
+    /**
+     * The rates of one bank in the exchange-rate panel, from the request that a
+     * click on a bank tab makes (only after that click)
+     */
+    function bank_rate_rows(response, url, nav_index) {
+        const html = get(parse_json(response), 'html');
+        if (!html) {
             return [];
         }
-        let data;
-        try {
-            data = JSON.parse(response);
-        } catch (e) {
-            return [];
-        }
-        const page = state.page;
-        let rank = 0;
-        return parse_each(get(data, 'result.contents') || [], content => {
-            rank++;
-            return make_row(page, state, rank, {
-                type: 'related-query',
-                title: clean(content.query || content.title),
-                link: absolute(content.href, page.url),
+        const doc = new DOMParser().parseFromString('<body>' + html + '</body>', 'text/html');
+        const bank = url.searchParams.get('u1') || '';
+        return later_rows(nav_index, 'exchange-rate', doc.querySelectorAll('li'), item => {
+            const name = text_of(item.querySelector('.name'));
+            const code = text_of(item.querySelector('dt em'));
+            const rate = text_of(item.querySelector('.spt_con strong'));
+            if (!name || !rate) {
+                return null;
+            }
+            const change = Array.from(item.querySelectorAll('.n_ch em')).map(em => text_of(em));
+            const direction = text_of(item.querySelector('.n_ch .ico'));
+            const link = item.querySelector('a[href]');
+            return {
+                key: bank + ':' + code,
+                type: 'exchange-rate-item',
+                title: (name + ' ' + code).trim(),
+                link: link ? absolute(link.getAttribute('href'), 'https://search.naver.com/search.naver') : '',
                 domain: '',
-                extra: {badge: clean(get(content, 'badge.text')) || undefined}
-            });
+                description: [rate, direction, change.join(' ')].filter(part => part).join(' '),
+                extra: {rate: rate, change: change[0], change_percent: change[1], direction: direction || undefined, bank: bank || undefined, trigger: 'click'}
+            };
         });
     }
 
@@ -1050,8 +1315,17 @@
             } catch (e) {
                 return [];
             }
+            // data requests of a results page, for its blocks
             if (url.hostname === 's.search.naver.com' && url.pathname.startsWith('/p/qra/')) {
-                return related_query_rows(response, source_platform_url, nav_index);
+                return related_query_rows(response, nav_index);
+            } else if (url.hostname === 'api.lounge.naver.com' && url.pathname.includes('/channelId/')) {
+                return lounge_rows(response, url, nav_index);
+            } else if (url.hostname === 'travelsearch-api.naver.com' && url.pathname === '/graphql') {
+                return travel_rows(response, nav_index);
+            } else if (url.hostname === 'api-gw.sports.naver.com' && url.pathname.endsWith('/schedule')) {
+                return sports_rows(response, url, nav_index);
+            } else if (url.hostname === 'ts-proxy.naver.com' && url.pathname === '/content/qapirender.nhn') {
+                return bank_rate_rows(response, url, nav_index);
             }
             if (url.hostname !== 'search.naver.com' || url.pathname !== '/search.naver' || response.indexOf('id="main_pack"') < 0) {
                 return [];

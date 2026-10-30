@@ -12,6 +12,10 @@
  * the document tree, so the module reads template.content.
  */
 (() => {
+    // what the page parse learned that a later data request of the same page needs
+    const pages = {};
+    const remembered_pages = [];
+
     // collections by element id: the block type, and whether the block is an ad
     const COLLECTIONS = [
         [/^tw[a-z]Coll$/, 'web-results'],
@@ -536,29 +540,168 @@
                 }
                 return fields;
             }
-            const name = item.querySelector('.fn_tit');
-            if (!name) {
+            return place_fields(page, item);
+        });
+    }
+
+    /**
+     * The fields of one place in a place list (.list_place > li)
+     */
+    function place_fields(page, item) {
+        const name = item.querySelector('.fn_tit');
+        if (!name) {
+            return null;
+        }
+        const words = text_of(item, {words: true, labels: true});
+        return {
+            type: 'place',
+            title: text_of(name),
+            link: link_of(name, page),
+            description: text_of(item.querySelector('.txt_address')),
+            is_ad: has_ad_label(item),
+            extra: {
+                category: text_of(item.querySelector('.inner_tit .f_nb')) || undefined,
+                marker: text_of(item.querySelector('.mark_count')) || undefined,
+                rating: first_match(text_of(item.querySelector('.f_red')), [/^(\d+(?:\.\d+)?)$/], parseFloat),
+                ratings: first_match(words, [/\(\s*([\d,]+)\s*\)/], number),
+                reviews: first_match(words, [/리뷰\s*([\d,]+\+?)/]),
+                status: first_match(words, [/(영업중|영업 중|영업종료|영업 종료|영업전|휴무|브레이크타임|24시간 영업)/]),
+                phone: first_match(words, [/(0\d{1,4}-\d{3,4}-\d{4}|1\d{3}-\d{4})/]),
+                homepage: link_of(item.querySelector('.link_home'), page) || undefined
+            }
+        };
+    }
+
+    /**
+     * The data of the AI summary (AI 요약). A script outside the block starts
+     * it, with the answer and its sources as JSON:
+     * SG.use.collection({name: 'aio-tot-p', ..., data: {response: {...}}})
+     */
+    function ai_summary_data(doc) {
+        const script = Array.from(doc.querySelectorAll('script')).find(element => element.textContent.includes("'aio-tot-p'"));
+        if (!script) {
+            return null;
+        }
+        const text = script.textContent;
+        const start = text.indexOf('{', text.indexOf('response:'));
+        let depth = 0, in_string = false, escaped = false;
+        for (let i = start; start >= 0 && i < text.length; i++) {
+            const c = text[i];
+            if (in_string) {
+                if (escaped) escaped = false;
+                else if (c === '\\') escaped = true;
+                else if (c === '"') in_string = false;
+                continue;
+            }
+            if (c === '"') in_string = true;
+            else if (c === '{') depth++;
+            else if (c === '}' && --depth === 0) {
+                try {
+                    return JSON.parse(text.slice(start, i + 1));
+                } catch (e) {
+                    console.warn('Daum: could not read the data of the AI summary');
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * AI summary: one row for each passage of the answer (an overview, then
+     * sections with a heading), with the sources it cites, then one row for
+     * each source. The topic, the question type and the disclaimer are in the
+     * first row.
+     */
+    function ai_summary_rows(page, block) {
+        const data = page.ai_summary;
+        if (!data) {
+            return [];
+        }
+        let rank = 0;
+        const rows = [];
+        for (const part of data.response || []) {
+            const sources = part.sources || [];
+            const text = clean(part.text);
+            if (!text) {
+                continue;
+            }
+            rows.push(make_row(page, block, ++rank, {
+                type: 'ai-summary-passage',
+                title: clean(part.title),
+                description: text,
+                link: sources.length ? sources[0].url : '',
+                domain: '',
+                extra: {
+                    ui: part.ui !== 'text' ? part.ui : undefined,
+                    source_urls: sources.map(source => source.url),
+                    source_names: sources.map(source => clean(source.name)),
+                    ai_generated: true
+                }
+            }));
+        }
+        for (const source of data.sources || []) {
+            rows.push(make_row(page, block, ++rank, {
+                type: 'ai-summary-source',
+                title: clean(source.title),
+                link: source.url || '',
+                description: clean(source.content).slice(0, 300),
+                publisher: clean(source.name),
+                published: source.createdAt || '',
+                doc_id: source.gsid || source.id,
+                extra: {kind: source.collector || undefined}
+            }));
+        }
+        if (rows.length) {
+            const first = JSON.parse(rows[0].extra || '{}');
+            Object.assign(first, {
+                topic: data.domain || undefined,
+                question_type: data.queryType || undefined,
+                disclaimer: clean(get_value(data, 'disclaimer.text')) || undefined,
+                stale: data.stale || undefined
+            });
+            rows[0].extra = JSON.stringify(first);
+        }
+        return rows;
+    }
+
+    function get_value(object, path) {
+        return path.split('.').reduce((value, key) => (value === undefined || value === null) ? undefined : value[key], object);
+    }
+
+    /**
+     * A place list that loads after a click on a sort option of the places
+     * block (정확도순, 거리순) or on its page buttons. The items count on
+     * after the items of the block; a place that the block already showed in
+     * the same order and page is left out.
+     */
+    function place_click_rows(response, url, nav_index) {
+        const state = pages[nav_index] && pages[nav_index].places;
+        const html = state && get_json(response, 'RESULT');
+        if (!html || typeof html !== 'string') {
+            return [];
+        }
+        const doc = new DOMParser().parseFromString('<body>' + html + '</body>', 'text/html');
+        const sort = url.searchParams.get('poi_sort_type') || 'default';
+        const results_page = parseInt(url.searchParams.get('p')) || 1;
+        return parse_each(doc.querySelectorAll('.list_place > li'), item => {
+            const fields = place_fields(state.page, item);
+            const key = sort + ':' + results_page + ':' + (fields && fields.link);
+            if (!fields || state.seen.has(key)) {
                 return null;
             }
-            const words = text_of(item, {words: true, labels: true});
-            return {
-                type: 'place',
-                title: text_of(name),
-                link: link_of(name, page),
-                description: text_of(item.querySelector('.txt_address')),
-                is_ad: has_ad_label(item),
-                extra: {
-                    category: text_of(item.querySelector('.inner_tit .f_nb')) || undefined,
-                    marker: text_of(item.querySelector('.mark_count')) || undefined,
-                    rating: first_match(text_of(item.querySelector('.f_red')), [/^(\d+(?:\.\d+)?)$/], parseFloat),
-                    ratings: first_match(words, [/\(\s*([\d,]+)\s*\)/], number),
-                    reviews: first_match(words, [/리뷰\s*([\d,]+\+?)/]),
-                    status: first_match(words, [/(영업중|영업 중|영업종료|영업 종료|영업전|휴무|브레이크타임|24시간 영업)/]),
-                    phone: first_match(words, [/(0\d{1,4}-\d{3,4}-\d{4}|1\d{3}-\d{4})/]),
-                    homepage: link_of(item.querySelector('.link_home'), page) || undefined
-                }
-            };
+            state.seen.add(key);
+            fields.extra = Object.assign(fields.extra, {trigger: 'click', sort: sort, list_page: results_page});
+            return make_row(state.page, state, state.next_rank++, fields);
         });
+    }
+
+    function get_json(response, key) {
+        try {
+            return JSON.parse(response)[key];
+        } catch (e) {
+            return undefined;
+        }
     }
 
     /**
@@ -791,6 +934,12 @@
                 break;
             case 'places':
                 rows = place_rows(page, block);
+                // a click on a sort option loads the list again; remember the block and what it showed
+                pages[page.id] = Object.assign(pages[page.id] || {}, {places: {
+                    ...block, element: null, page: page,
+                    next_rank: rows.reduce((max, row) => Math.max(max, row.item_rank), 0) + 1,
+                    seen: new Set(rows.filter(row => row.type === 'place').map(row => 'default:1:' + row.link))
+                }});
                 break;
             case 'donations':
                 // a list, or a carousel with one fundraiser for each page
@@ -851,8 +1000,10 @@
                 }));
                 break;
             case 'ai-summary':
-                // the answer arrives later, with its own request
-                rows = [panel_row(page, block, {description: 'The answer of this block loads with a separate request.'})];
+                rows = ai_summary_rows(page, block);
+                if (!rows.length) {
+                    rows = [panel_row(page, block, {description: 'The page has no data for the answer of this block.'})];
+                }
                 break;
             case 'unknown':
                 // a collection that this module does not know yet: cards and documents, if any
@@ -873,6 +1024,10 @@
             } catch (e) {
                 return [];
             }
+            // the place list after a click on a sort option of the places block
+            if (url.hostname === 'search.daum.net' && url.pathname === '/qsearch2' && url.searchParams.get('coll') === 'poi') {
+                return place_click_rows(response, url, nav_index);
+            }
             // the integrated search (w=tot) and its next results pages (w=fusion)
             const kind = url.searchParams.get('w');
             if (url.hostname !== 'search.daum.net' || url.pathname !== '/search' || (kind && !['tot', 'fusion'].includes(kind))
@@ -888,13 +1043,21 @@
                 results_page: parseInt(url.searchParams.get('p')) || 1
             };
             const doc = new DOMParser().parseFromString(response, 'text/html');
+            page.ai_summary = ai_summary_data(doc);
 
             let rank = 0;
-            return parse_each(page_blocks(doc), block => {
+            const rows = parse_each(page_blocks(doc), block => {
                 rank++;
                 block.rank = rank;
                 return block_rows(page, block);
             });
+
+            // keep what later requests of a page need, for the last 50 pages
+            remembered_pages.push(nav_index);
+            while (remembered_pages.length > 50) {
+                delete pages[remembered_pages.shift()];
+            }
+            return rows;
         }
     );
 })();
