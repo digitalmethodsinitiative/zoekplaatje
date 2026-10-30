@@ -372,6 +372,43 @@
         #popup tr:nth-child(even) {
             background: var(--neutral-contrast-alt);
         }
+
+        /** tabs of the main page **/
+        .tabs {
+            display: flex;
+            gap: 0.5em;
+            margin: 0 1em 0.5em 1em;
+        }
+        .tabs button.on {
+            background: var(--accent);
+            color: var(--neutral);
+        }
+        .num-pages {
+            display: block;
+            font-size: 0.75em;
+        }
+
+        /** settings **/
+        #settings .setting {
+            display: flex;
+            gap: 1em;
+            align-items: flex-start;
+            margin: 0 0 1em 0;
+        }
+        #settings .setting .toggle-switch {
+            flex: 0 0 55px;
+            margin-top: 0.2em;
+        }
+        #settings .setting p {
+            margin: 0;
+            font-size: 0.9em;
+        }
+        #settings .setting strong {
+            display: block;
+        }
+        #settings .always {
+            font-size: 0.9em;
+        }
     </style>
     <link rel="shortcut icon" href="/images/icon-96.png">
 </head>
@@ -381,7 +418,11 @@
         <h1>Zoekplaatje</h1>
         <span class="version">v1.12.90</span>
     </header>
-    <section id="status">
+    <nav class="tabs">
+        <button class="tab on" data-tab="status">Captured results</button>
+        <button class="tab" data-tab="settings">Settings</button>
+    </nav>
+    <section id="status" class="tab-section" aria-hidden="false">
         <h2><span>Captured results</span></h2>
         <div>
             <table id="item-table">
@@ -396,6 +437,34 @@
                 <tbody></tbody>
             </table>
             <button class="reset-all"><i class="fa fa-times"></i> Clear all</button>
+        </div>
+    </section>
+    <section id="settings" class="tab-section" aria-hidden="true">
+        <h2><span>Settings</span></h2>
+        <p class="always">For each page with captured results, Zoekplaatje always saves the version of Zoekplaatje,
+            the browser (user agent), the languages that Firefox asks websites for, the time zone, and the size of the
+            window and the page. The pages button of each search engine downloads them. The settings below save more.</p>
+        <div class="setting">
+            <div class="toggle-switch"><label for="zs-setting-privacy"><input type="checkbox" class="setting-toggle" id="zs-setting-privacy" name="zs-setting-privacy" data-permission="privacy"><span class="toggle"></span></label></div>
+            <p><strong>Save the privacy settings of Firefox</strong>Tracking protection, fingerprinting protection,
+                cookies, HTTPS-only mode and Global Privacy Control. These settings change what a search engine knows
+                about you. Firefox asks you for permission one time.</p>
+        </div>
+        <div class="setting">
+            <div class="toggle-switch"><label for="zs-setting-ip-lookup"><input type="checkbox" class="setting-toggle" id="zs-setting-ip-lookup" name="zs-setting-ip-lookup"><span class="toggle"></span></label></div>
+            <p><strong>Save the country of your internet connection</strong>Search results depend on location. To find
+                the country, Zoekplaatje asks Cloudflare (cloudflare.com/cdn-cgi/trace), at most one time in 10 minutes.
+                Cloudflare then sees your IP address.</p>
+        </div>
+        <div class="setting">
+            <div class="toggle-switch"><label for="zs-setting-store-ip"><input type="checkbox" class="setting-toggle" id="zs-setting-store-ip" name="zs-setting-store-ip" data-requires="zs-setting-ip-lookup"><span class="toggle"></span></label></div>
+            <p><strong>Also save the IP address</strong>Only when the country lookup is on. An IP address can identify
+                you or your organization: keep it out of shared data.</p>
+        </div>
+        <div class="setting">
+            <div class="toggle-switch"><label for="zs-setting-extensions"><input type="checkbox" class="setting-toggle" id="zs-setting-extensions" name="zs-setting-extensions" data-permission="management"><span class="toggle"></span></label></div>
+            <p><strong>Save a list of your other add-ons</strong>Their names and versions. An ad blocker, for example,
+                removes ads from the results. Firefox asks you for permission one time.</p>
         </div>
     </section>
     <section id="disclaimer">

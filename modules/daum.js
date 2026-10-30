@@ -1046,11 +1046,21 @@
             page.ai_summary = ai_summary_data(doc);
 
             let rank = 0;
-            const rows = parse_each(page_blocks(doc), block => {
+            const blocks = page_blocks(doc);
+            const rows = parse_each(blocks, block => {
                 rank++;
                 block.rank = rank;
                 return block_rows(page, block);
             });
+
+            // fields of the page record (see js/pages.js); the places block says which area
+            // it searched, for example "서울 강남구 강남역 주변 맛집" or "전국의 약국"
+            rows.page = {
+                query: page.query,
+                results_page: page.results_page,
+                blocks: blocks.length,
+                places_area: text_of(doc.querySelector('#poiColl .txt_result')) || undefined
+            };
 
             // keep what later requests of a page need, for the last 50 pages
             remembered_pages.push(nav_index);

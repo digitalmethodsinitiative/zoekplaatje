@@ -28,6 +28,7 @@
     "webRequest", "webRequestBlocking", "webNavigation", "<all_urls>", "storage", "downloads", "activeTab", "tabs",
     "unlimitedStorage"
   ],
+  "optional_permissions": ["privacy", "management"],
 
   "incognito": "not_allowed",
 
@@ -38,6 +39,7 @@
       "inc/moment.js",
       "inc/lib.js",
       "js/background.js",
+      "js/pages.js",
       "modules/google.js",
       "modules/baidu.js",
       "modules/bing.js",

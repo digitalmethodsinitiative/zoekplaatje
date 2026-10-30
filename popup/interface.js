@@ -53,10 +53,13 @@ function activate_buttons() {
     document.querySelectorAll("td button").forEach(button => {
         let current = button.disabled;
         let items = parseInt(button.parentNode.parentNode.querySelector('.num-items').innerText);
+        let pages = parseInt(button.parentNode.parentNode.querySelector('.num-pages').getAttribute('data-pages'));
         let new_status = current;
 
         if(button.classList.contains('download-csv') || button.classList.contains('reset') || button.classList.contains('preview')) {
             new_status = !(items > 0);
+        } else if(button.classList.contains('download-pages')) {
+            new_status = !(pages > 0);
         }
 
         if(new_status !== current) {
@@ -87,7 +90,8 @@ async function toggle_listening(e) {
  * Update favicon depending on whether capture is enabled
  */
 function update_icon() {
-    const any_enabled = Array.from(document.querySelectorAll('.toggle-switch input')).filter(item => item.checked);
+    // the switches of the search engines, not those of the settings
+    const any_enabled = Array.from(document.querySelectorAll('#item-table .toggle-switch input')).filter(item => item.checked);
     const path = any_enabled.length > 0 ? '/images/icon-96-enabled.png' : '/images/icon-96.png';
     document.querySelector('link[rel~=icon]').setAttribute('href', path);
 }
@@ -103,15 +107,18 @@ function update_icon() {
  */
 async function get_stats() {
     let response = [];
+    let pages = [];
     let platform_map = [];
     Object.keys(background.zoekplaatje.modules).forEach(function(platform) { platform_map[platform] = background.zoekplaatje.modules[platform].name; });
     for(let module in background.zoekplaatje.modules) {
         response[module] = await background.db.items.where("source_platform").equals(module).count();
+        pages[module] = await background.db.pages.where("source_platform").equals(module).count();
     }
 
     for (let platform in response) {
         let row_id = "stats-" + platform.replace(/[^a-zA-Z0-9]/g, "");
         let new_num_items = parseInt(response[platform]);
+        let pages_text = pages[platform] === 1 ? '1 page' : new Intl.NumberFormat().format(pages[platform]) + ' pages';
         if(!document.querySelector("#" + row_id)) {
             let toggle_field = 'zs-enabled-' + platform;
             let enabled = await background.browser.storage.local.get([toggle_field])
@@ -127,7 +134,10 @@ async function get_stats() {
 
             row.appendChild(createElement("td", {}, createElement('div', {'class': 'toggle-switch'}, checker)));
             row.appendChild(createElement("td", {}, createElement('a', {'href': 'https://' + platform}, platform_map[platform])));
-            row.appendChild(createElement("td", {"class": "num-items"}, new Intl.NumberFormat().format(response[platform])));
+            let count = createElement("td");
+            count.appendChild(createElement("span", {"class": "num-items"}, new Intl.NumberFormat().format(response[platform])));
+            count.appendChild(createElement("span", {"class": "num-pages", "data-pages": pages[platform]}, pages_text));
+            row.appendChild(count);
 
             let actions = createElement("td");
             let clear_button = createElement("button", {"data-platform": platform, "class": "reset"}, " Clear");
@@ -136,18 +146,33 @@ async function get_stats() {
                 "data-platform": platform,
                 "class": "download-csv"
             }, " .csv");
+            // the page records: one row for each page view, with the run details
+            let pages_button = createElement("button", {
+                "data-platform": platform,
+                "class": "download-pages",
+                "title": "One row for each page, with the run details"
+            }, " pages");
             clear_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-times'}));
             preview_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-table'}));
             download_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
+            pages_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
 
             actions.appendChild(clear_button);
             actions.appendChild(preview_button);
             actions.appendChild(download_button);
+            actions.appendChild(pages_button);
 
             row.appendChild(actions);
             document.querySelector("#item-table tbody").appendChild(row);
-        } else if(new_num_items !== parseInt(document.querySelector("#" + row_id + " .num-items").innerText)) {
-            document.querySelector("#" + row_id + " .num-items").innerText = new Intl.NumberFormat().format(new_num_items);
+        } else {
+            if(new_num_items !== parseInt(document.querySelector("#" + row_id + " .num-items").innerText)) {
+                document.querySelector("#" + row_id + " .num-items").innerText = new Intl.NumberFormat().format(new_num_items);
+            }
+            const num_pages = document.querySelector("#" + row_id + " .num-pages");
+            if(parseInt(num_pages.getAttribute('data-pages')) !== pages[platform]) {
+                num_pages.setAttribute('data-pages', pages[platform]);
+                num_pages.innerText = pages_text;
+            }
         }
     }
 
@@ -171,6 +196,24 @@ async function button_handler(event) {
 
     if (event.target.matches('.popup-close')) {
         document.querySelector('#popup').setAttribute('aria-hidden', 'true');
+
+    } else if (event.target.matches('.tab')) {
+        const tab = event.target.getAttribute('data-tab');
+        document.querySelectorAll('.tab').forEach(button => button.classList.toggle('on', button === event.target));
+        document.querySelectorAll('.tab-section').forEach(section => section.setAttribute('aria-hidden', section.id === tab ? 'false' : 'true'));
+
+    } else if (event.target.matches('.download-pages')) {
+        let platform = event.target.getAttribute('data-platform');
+        let date = new Date();
+        event.target.classList.add('loading');
+        let blob = await get_pages_blob(platform);
+        let filename = 'zoekplaatje-pages-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.csv';
+        await browser.downloads.download({
+            url: window.URL.createObjectURL(blob),
+            filename: filename,
+            conflictAction: 'uniquify'
+        });
+        event.target.classList.remove('loading');
 
     } else if (event.target.matches('.preview')) {
         const platform = event.target.getAttribute('data-platform');
@@ -201,9 +244,11 @@ async function button_handler(event) {
     } else if (event.target.matches('.reset')) {
         let platform = event.target.getAttribute('data-platform');
         await background.db.items.where("source_platform").equals(platform).delete();
+        await background.db.pages.where("source_platform").equals(platform).delete();
 
     } else if (event.target.matches('.reset-all')) {
         await background.db.items.clear();
+        await background.db.pages.clear();
 
     } else if (event.target.matches('.download-csv')) {
         let platform = event.target.getAttribute('data-platform');
@@ -254,9 +299,106 @@ async function get_results(platform) {
 function export_row(item) {
     const row = {...item['data']};
     if (item['timestamp_collected']) {
-        row['timestamp'] = new Date(item['timestamp_collected']).toISOString().replace('T', ' ').slice(0, 19);
+        row['timestamp'] = utc_time(item['timestamp_collected']);
+    }
+    // the page view of the row, as in the pages file (Naver and Daum set it themselves)
+    if (!('page_id' in row) && item['nav_index']) {
+        row['page_id'] = item['nav_index'];
     }
     return row;
+}
+
+function utc_time(milliseconds) {
+    return new Date(milliseconds).toISOString().replace('T', ' ').slice(0, 19);
+}
+
+/**
+ * Fields of page records, in this order in the pages file; other fields (the
+ * fields that a module adds) follow
+ */
+const PAGE_FIELDS = ['page_id', 'engine', 'query', 'results_page', 'url', 'captured_at', 'last_captured_at', 'rows', 'blocks',
+    'problems', 'extension_version', 'user_agent', 'accept_language', 'languages', 'time_zone', 'utc_offset',
+    'window_width', 'window_height', 'page_width', 'page_height', 'device_pixel_ratio', 'screen_width', 'screen_height',
+    'ip_country', 'ip_datacenter', 'ip', 'extensions'];
+
+/**
+ * Row for a page record, as the pages file shows it
+ *
+ * @param page  Page record as stored in the database
+ * @returns {Object}
+ */
+function export_page(page) {
+    const row = {...page};
+    row['page_id'] = page['nav_index'];
+    delete row['nav_index'];
+    delete row['source_platform'];
+    for (const field of ['captured_at', 'last_captured_at']) {
+        if (row[field]) {
+            row[field] = utc_time(row[field]);
+        }
+    }
+    row['problems'] = (page['problems'] || []).join('; ');
+    return row;
+}
+
+/**
+ * Get a CSV file of the page records of a platform, in order of capture
+ *
+ * @param platform
+ * @returns {Promise<Blob>}
+ */
+async function get_pages_blob(platform) {
+    const pages = (await background.db.pages.where('source_platform').equals(platform).toArray())
+        .sort((a, b) => a.captured_at - b.captured_at).map(export_page);
+    const fields = new Set();
+    pages.forEach(page => Object.keys(page).forEach(field => fields.add(field)));
+    const headers = PAGE_FIELDS.filter(field => fields.has(field)).concat([...fields].filter(field => !PAGE_FIELDS.includes(field)).sort());
+
+    let csv = [headers.map(csv_value).join(','), "\r\n"];
+    for (const page of pages) {
+        csv.push(headers.map(field => csv_value(page[field])).join(','));
+        csv.push("\r\n");
+    }
+    return new Blob(csv, {type: 'text/csv'});
+}
+
+/**
+ * Show the settings as they are stored, and keep them up to date
+ *
+ * A setting that needs a permission (privacy settings, other add-ons) asks
+ * Firefox for it when it is turned on, and stays off if it is not given. The
+ * IP address setting only works with the country lookup.
+ */
+async function init_settings() {
+    const toggles = Array.from(document.querySelectorAll('.setting-toggle'));
+    const stored = await background.browser.storage.local.get(toggles.map(toggle => toggle.name));
+    const update_dependents = () => {
+        for (const toggle of toggles.filter(toggle => toggle.getAttribute('data-requires'))) {
+            const required = document.getElementById(toggle.getAttribute('data-requires'));
+            toggle.disabled = !required.checked;
+        }
+    };
+    for (const toggle of toggles) {
+        toggle.checked = !!parseInt(stored[toggle.name]);
+        const permission = toggle.getAttribute('data-permission');
+        if (toggle.checked && permission && !await browser.permissions.contains({permissions: [permission]})) {
+            // the permission was taken back in the add-ons manager
+            toggle.checked = false;
+            await background.browser.storage.local.set({[toggle.name]: '0'});
+        }
+        toggle.addEventListener('change', async () => {
+            if (toggle.checked && permission) {
+                // must be asked in the event handler of the click
+                const granted = await browser.permissions.request({permissions: [permission]});
+                if (!granted) {
+                    toggle.checked = false;
+                }
+            }
+            await background.browser.storage.local.set({[toggle.name]: toggle.checked ? '1' : '0'});
+            update_dependents();
+        });
+    }
+    update_dependents();
 }
 
 /**
@@ -424,6 +566,7 @@ function fastForward(lastRow, idProp, otherCriteria) {
 document.addEventListener('DOMContentLoaded', async function () {
     get_stats();
     setInterval(get_stats, 1000);
+    init_settings();
 
     document.addEventListener('click', button_handler);
 });

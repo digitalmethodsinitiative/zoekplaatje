@@ -46,6 +46,13 @@ initially, to understand what data is (and is not!) collected and how it is pars
 The .csv file uses UTF-8. The `timestamp` column gives the time of capture in UTC, as `YYYY-MM-DD HH:MM:SS`. Values 
 are written as they were captured, so a spreadsheet program may run a value that starts with `=` as a formula.
 
+The `pages` button downloads a second .csv file with one row for each page view on which results were captured. The 
+`page_id` column connects it to the results file. Each page has its URL, query, results page, the time of the first and 
+last capture, the number of rows, and run details: the version of Zoekplaatje, the browser, the languages that Firefox 
+asked for (`accept_language`), the time zone and the size of the window and the page. In the Settings tab you can also 
+save the privacy settings of Firefox, the country of your internet connection (found with Cloudflare), the IP address, 
+and a list of your other add-ons. These settings are off by default.
+
 ## Credits & license
 Zoekplaatje was developed by Stijn Peeters for the [Digital Methods Initiative](https://digitalmethods.net) and is 
 licensed under the Mozilla Public License, 2.0. Refer to the LICENSE file for more information.  It is heavily based on 
