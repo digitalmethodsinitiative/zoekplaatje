@@ -1,0 +1,12 @@
+{
+  "name": "zoekplaatje-tests",
+  "private": true,
+  "description": "Runs Zoekplaatje modules against saved results pages, outside the browser.",
+  "type": "module",
+  "scripts": {
+    "test": "node run-module.mjs"
+  },
+  "devDependencies": {
+    "linkedom": "^0.18.0"
+  }
+}

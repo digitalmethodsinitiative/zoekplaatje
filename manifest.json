@@ -45,7 +45,9 @@
       "modules/najdi.si.js",
       "modules/marginalia.js",
       "modules/seznam.js",
-      "modules/yandex.js"
+      "modules/yandex.js",
+      "modules/naver.js",
+      "modules/daum.js"
     ]
   }
 }

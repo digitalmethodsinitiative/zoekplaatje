@@ -12,9 +12,11 @@ download them as a .CSV spreadsheet. It is intended to facilitate systematic ana
 Currently, it supports the following search engines:
 * [Baidu](https://baidu.com)
 * [Bing](https://www.bing.com)
+* [Daum](https://www.daum.net) (integrated search, desktop)
 * [DuckDuckGo](https://duckduckgo.com) (organic results only)
 * [Google](https://www.google.com)
 * [Najdi.si](https://najdi.si)
+* [Naver](https://www.naver.com) (integrated search, desktop)
 * [Seznam](https://seznam.cz)
 * [Yandex](https://yandex.com)
 

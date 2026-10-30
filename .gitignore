@@ -1,2 +1,8 @@
 # Development and Build artefacts
 .idea
+
+# Tests: packages, saved pages and outputs (pages of search engines are not in git)
+tests/node_modules/
+tests/fixtures/
+tests/expected/
+tests/out/
