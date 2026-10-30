@@ -317,6 +317,25 @@
             animation: move 2s linear infinite;
         }
 
+        #settings .setting {
+            text-align: center;
+            margin-bottom: 1em;
+        }
+
+        #resolve-status {
+            text-align: center;
+            font-size: 0.8em;
+            margin-bottom: 1em;
+        }
+
+        #resolve-status p {
+            margin: 0 0 0.5em 0;
+        }
+
+        #resolve-status[data-state=waiting] p, #resolve-status[data-state=captcha] p, #resolve-status[data-state=unexpected] p {
+            font-weight: bold;
+        }
+
         #disclaimer {
             text-align: center;
             margin: 1em;
@@ -396,6 +415,23 @@
                 <tbody></tbody>
             </table>
             <button class="reset-all"><i class="fa fa-times"></i> Clear all</button>
+        </div>
+    </section>
+    <section id="settings">
+        <h2><span>Settings</span></h2>
+        <div class="setting">
+            <div class="toggle-switch">
+                <label for="zs-resolve-links">
+                    <input id="zs-resolve-links" name="zs-resolve-links" type="checkbox">
+                    <span class="toggle"></span>
+                </label>
+            </div>
+            Resolve hidden Google result links
+            <span class="tooltippable" title="Google sometimes hides where results lead behind a redirect link. When enabled, Zoekplaatje asks Google where each of these leads, from the result page, one link every few seconds, including those of results captured before enabling this. Google may count this as a click on each result. Results you click yourself are always resolved.">?</span>
+        </div>
+        <div id="resolve-status" aria-hidden="true">
+            <p></p>
+            <button id="resolve-retry" aria-hidden="true"><i class="fa fa-rotate-right"></i> Try again</button>
         </div>
     </section>
     <section id="disclaimer">

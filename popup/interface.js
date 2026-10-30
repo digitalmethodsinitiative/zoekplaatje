@@ -87,7 +87,7 @@ async function toggle_listening(e) {
  * Update favicon depending on whether capture is enabled
  */
 function update_icon() {
-    const any_enabled = Array.from(document.querySelectorAll('.toggle-switch input')).filter(item => item.checked);
+    const any_enabled = Array.from(document.querySelectorAll('#item-table .toggle-switch input')).filter(item => item.checked);
     const path = any_enabled.length > 0 ? '/images/icon-96-enabled.png' : '/images/icon-96.png';
     document.querySelector('link[rel~=icon]').setAttribute('href', path);
 }
@@ -153,7 +153,26 @@ async function get_stats() {
 
     activate_buttons();
     update_icon();
+    update_resolve_status();
     init_tooltips();
+}
+
+/**
+ * Show whether hidden result links are still to be resolved
+ *
+ * With a button to try again when resolving is waiting for something.
+ */
+function update_resolve_status() {
+    const status = background.zoekplaatje.redirects.get_status();
+    const container = document.querySelector('#resolve-status');
+    const message = container.querySelector('p');
+
+    container.setAttribute('aria-hidden', status.state === 'idle' ? 'true' : 'false');
+    container.setAttribute('data-state', status.state);
+    if (message.textContent !== status.message) {
+        message.textContent = status.message;
+    }
+    container.querySelector('#resolve-retry').setAttribute('aria-hidden', ['waiting', 'captcha', 'unexpected'].includes(status.state) ? 'false' : 'true');
 }
 
 /**
@@ -169,7 +188,10 @@ async function get_stats() {
 async function button_handler(event) {
     let status = document.getElementById('upload-status');
 
-    if (event.target.matches('.popup-close')) {
+    if (event.target.closest('#resolve-retry')) {
+        await background.zoekplaatje.redirects.retry();
+
+    } else if (event.target.matches('.popup-close')) {
         document.querySelector('#popup').setAttribute('aria-hidden', 'true');
 
     } else if (event.target.matches('.preview')) {
@@ -263,7 +285,7 @@ function export_row(item) {
  * Fields that most modules write, in the order of the Google module. Exports
  * put these first, so that a column keeps its place whichever row comes first.
  */
-const COMMON_FIELDS = ['id', 'timestamp', 'source', 'query', 'type', 'domain', 'title', 'published', 'description', 'link', 'section'];
+const COMMON_FIELDS = ['id', 'timestamp', 'source', 'query', 'type', 'domain', 'title', 'published', 'description', 'link', 'final_link', 'section'];
 
 function get_headers(results) {
     // rows of one engine can have different fields, so use the fields of all
@@ -424,6 +446,10 @@ function fastForward(lastRow, idProp, otherCriteria) {
 document.addEventListener('DOMContentLoaded', async function () {
     get_stats();
     setInterval(get_stats, 1000);
+
+    const resolve_links = await background.browser.storage.local.get(['zs-resolve-links']);
+    document.querySelector('#zs-resolve-links').checked = !!parseInt(resolve_links['zs-resolve-links']);
+    document.querySelector('#zs-resolve-links').addEventListener('change', toggle_listening);
 
     document.addEventListener('click', button_handler);
 });

@@ -44,6 +44,38 @@ initially, to understand what data is (and is not!) collected and how it is pars
 The .csv file uses UTF-8. The `timestamp` column gives the time of capture in UTC, as `YYYY-MM-DD HH:MM:SS`. Values 
 are written as they were captured, so a spreadsheet program may run a value that starts with `=` as a formula.
 
+### Hidden Google result links
+Google sometimes hides where its results lead: instead of linking to a result directly, it links to a redirect on its 
+own domain with an encrypted token (`https://www.google.com/goto?url=CAES...`). This mostly seems to happen in fresh or 
+logged-out browser profiles. The actual URL is then not in the page.
+
+The `link` column therefore contains the link as Google served it, which may be such a redirect. The `final_link`
+column contains where the result leads, as far as Zoekplaatje knows: the link itself if Google linked to the result
+directly, the destination if Google's redirect includes it, or where Google redirected to once a hidden link has been
+resolved. It is empty if this is not known. For hidden links, the `domain` column contains the domain Google displays
+with the result.
+
+When you click a result with a hidden link, Zoekplaatje records where it leads. You can also enable *Resolve hidden
+Google result links* in the Zoekplaatje interface. Zoekplaatje will then request each hidden link from an open Google
+result page, one every few seconds, without visiting the result itself. This includes hidden links of results you
+captured before enabling it (unless you have cleared them since). Note that Google may count these requests as clicks
+on the results.
+
+The number of links still to be resolved is shown on the Zoekplaatje toolbar button. Hover over the button, or open the
+Zoekplaatje interface, to see what it is waiting for:
+* If no Google result page is open anymore, the number turns orange. Resolving continues once you open or reload a 
+  Google result page.
+* If Google asks for a CAPTCHA, the number turns red and Zoekplaatje stops resolving links until you have solved it.
+  Reload a Google search and solve the CAPTCHA; resolving continues once Google shows results again.
+* If Google answers a request in an unexpected way, for example with an error or by redirecting back to Google itself,
+  the number also turns red and Zoekplaatje stops resolving links, since it is not clear what Google is doing. The
+  interface shows what Google answered (more details are logged in the extension's console). Resolving continues once
+  Google shows results again. A link that gets an unexpected answer twice is skipped; its `final_link` stays empty.
+
+In all cases you can also click *Try again* in the interface. Turning the setting off stops resolving any remaining
+links. Links can only be resolved while the browser is open; results captured before restarting the browser keep an
+empty `final_link`.
+
 ## Credits & license
 Zoekplaatje was developed by Stijn Peeters for the [Digital Methods Initiative](https://digitalmethods.net) and is 
 licensed under the Mozilla Public License, 2.0. Refer to the LICENSE file for more information.  It is heavily based on 

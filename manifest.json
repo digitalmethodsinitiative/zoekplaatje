@@ -38,6 +38,7 @@
       "inc/moment.js",
       "inc/lib.js",
       "js/background.js",
+      "js/redirects.js",
       "modules/google.js",
       "modules/baidu.js",
       "modules/bing.js",

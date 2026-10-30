@@ -18,11 +18,17 @@ window.zoekplaatje = {
      * @param name  Module identifier
      * @param domain  Module primary domain name
      * @param callback  Function to parse request content with, returning an Array of extracted items
+     * @param redirects  Optional object with functions for redirect links that hide where results lead
+     * (see redirects.js), called as its methods: get_redirect_token(link) returns the token of such a
+     * link, or null if it is not one; get_final_link(link) returns where a link leads as far as the link
+     * itself tells, or '' if that is hidden; is_captcha(url) returns whether a URL is the engine's
+     * CAPTCHA page
      */
-    register_module: function (name, domain, callback) {
+    register_module: function (name, domain, callback, redirects = {}) {
         this.modules[domain] = {
             name: name,
-            callback: callback
+            callback: callback,
+            redirects: redirects
         };
     },
 
@@ -166,17 +172,22 @@ window.zoekplaatje = {
                 // one time for all items of a response, so that the rows of one
                 // page have the same timestamp in the export
                 const timestamp_collected = Date.now();
-                await Promise.all(item_list.filter(item => item).map(item => db.items.add({
-                    "nav_index": nav_index,
-                    "item_id": item["id"],
-                    "timestamp_collected": timestamp_collected,
-                    "source_platform": module,
-                    "source_platform_url": source_platform_url,
-                    "source_url": source_url,
-                    "user_agent": navigator.userAgent,
-                    "data": item
-                })));
+                let redirect_links = [];
+                await Promise.all(item_list.filter(item => item).map(async (item) => {
+                    const id = await db.items.add({
+                        "nav_index": nav_index,
+                        "item_id": item["id"],
+                        "timestamp_collected": timestamp_collected,
+                        "source_platform": module,
+                        "source_platform_url": source_platform_url,
+                        "source_url": source_url,
+                        "user_agent": navigator.userAgent,
+                        "data": item
+                    });
+                    redirect_links.push(...await zoekplaatje.redirects.register(module, id, item["link"]));
+                }));
 
+                await zoekplaatje.redirects.enqueue(module, tabId, redirect_links);
                 return;
             }
         }
