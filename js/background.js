@@ -9,7 +9,9 @@ window.db.version(1).stores({
 window.zoekplaatje = {
     modules: {},
     session: null,
+    ready: null,
     tab_url_map: {},
+    nav_index: {},
 
     /**
      * Register module
@@ -105,6 +107,9 @@ window.zoekplaatje = {
      * @param tabId  ID of the tab in which the request was captured
      */
     parse_request: async function (response, source_platform_url, source_url, tabId) {
+        // the session is read from the database at startup
+        await this.ready;
+
         if (!source_platform_url) {
             source_platform_url = source_url;
         }
@@ -127,22 +132,11 @@ window.zoekplaatje = {
         const old_url = this.tab_url_map[tabId];
         this.tab_url_map[tabId] = source_platform_url;
         if (old_url && source_platform_url !== old_url) {
-            await zoekplaatje.nav_handler(tabId);
+            this.nav_handler(tabId);
         }
 
-        // get the navigation index for the tab
-        // if any of the processed items already exist for this combination of
-        // navigation index and tab ID, it is ignored as a duplicate
-        // in one transaction, so that responses parsed at the same time add one record
-        let nav_index = await db.transaction('rw', db.nav, async () => {
-            let nav = await db.nav.where({"tab_id": tabId, "session": this.session}).first();
-            if (!nav) {
-                nav = {"tab_id": tabId, "session": this.session, "index": 0};
-                await db.nav.add(nav);
-            }
-            return nav;
-        });
-        nav_index = nav_index.session + ":" + nav_index.tab_id + ":" + nav_index.index;
+        // the navigation index tells which page view an item was captured on
+        const nav_index = this.session + ":" + tabId + ":" + (this.nav_index[tabId] || 0);
 
         let item_list = [];
         for (let module in this.modules) {
@@ -161,27 +155,19 @@ window.zoekplaatje = {
                 continue;
             }
             if (item_list && item_list.length > 0) {
-                await Promise.all(item_list.map(async (item) => {
-                    if (!item) {
-                        return;
-                    }
-
-                    let item_id = item["id"];
-                    let exists = await db.items.where({"item_id": item_id, "nav_index": nav_index}).first();
-
-                    if (!exists) {
-                        await db.items.add({
-                            "nav_index": nav_index,
-                            "item_id": item_id,
-                            "timestamp_collected": Date.now(),
-                            "source_platform": module,
-                            "source_platform_url": source_platform_url,
-                            "source_url": source_url,
-                            "user_agent": navigator.userAgent,
-                            "data": item
-                        });
-                    }
-                }));
+                // one time for all items of a response, so that the rows of one
+                // page have the same timestamp in the export
+                const timestamp_collected = Date.now();
+                await Promise.all(item_list.filter(item => item).map(item => db.items.add({
+                    "nav_index": nav_index,
+                    "item_id": item["id"],
+                    "timestamp_collected": timestamp_collected,
+                    "source_platform": module,
+                    "source_platform_url": source_platform_url,
+                    "source_url": source_url,
+                    "user_agent": navigator.userAgent,
+                    "data": item
+                })));
 
                 return;
             }
@@ -203,28 +189,16 @@ window.zoekplaatje = {
 
     /**
      * Callback for browser navigation
-     * Increases the nav_index for a given tab to aid in deduplication of captured items
+     * Increases the nav_index for a given tab, so that items of different
+     * page views have a different nav_index
      * @param tabId  Tab ID to update nav index for
      */
-    nav_handler: async function (tabId) {
-        if (tabId.hasOwnProperty("tabId")) {
-            tabId = tabId.tabId;
-        }
-
-        // use zoekplaatje, not this: Firefox calls event listeners without it.
-        // one transaction, so that navigations at the same time all count
-        await db.transaction('rw', db.nav, async () => {
-            const nav = await db.nav.where({"session": zoekplaatje.session, "tab_id": tabId}).first();
-            if (nav) {
-                await db.nav.update(nav.id, {"index": nav.index + 1});
-            } else {
-                await db.nav.add({"session": zoekplaatje.session, "tab_id": tabId, "index": 1});
-            }
-        });
+    nav_handler: function (tabId) {
+        this.nav_index[tabId] = (this.nav_index[tabId] || 0) + 1;
     }
 }
 
-zoekplaatje.init();
+zoekplaatje.ready = zoekplaatje.init();
 
 browser.webRequest.onBeforeRequest.addListener(
     zoekplaatje.listener, {urls: ["https://*/*"], types: ["main_frame", "xmlhttprequest", "script"]}, ["blocking"]
