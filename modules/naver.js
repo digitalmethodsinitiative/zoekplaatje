@@ -21,6 +21,23 @@
     // web result groups: the documents of one area code form one block
     const DOCUMENT_KINDS = ['web', 'review', 'kin', 'video'];
     const PANEL_TYPES = [
+        // Brand Search (브랜드검색): an ad of a brand at the top of the page
+        [/brand_search/, 'brand-search'],
+        // finance (stocks and crypto); the heading tells the 'finance' blocks apart, see FINANCE_HEADINGS
+        [/cs_virtual_asset_aib/, 'ai-issue-briefing'],
+        [/cs_stock_same/, 'related-stocks'],
+        [/cs_stock_top_ranking/, 'popular-stocks'],
+        [/cs_stock|cs_virtual_asset/, 'finance'],
+        [/nx_hotel/, 'hotels'],
+        [/cs_flight_info/, 'flight-info'],
+        [/cs_pc_subwayline/, 'subway-map'],
+        [/cs_sportsdb/, 'sports-schedule'],
+        [/cs_suneung/, 'exam-info'],
+        [/cs_lotto/, 'lottery'],
+        [/cs_grammar_check/, 'spell-checker'],
+        [/cs_translator/, 'translator'],
+        [/cs_recommendation_new/, 'search-tip'],
+        [/cs_same_different/, 'disambiguation'],
         [/cs_kb_weather/, 'weather'],
         [/cs_nexchangerate/, 'exchange-rate'],
         [/_cs_sports_people|_au_people_content_wrap/, 'person'],
@@ -32,8 +49,17 @@
         [/nx_ts_do/, 'travel-destination'],
         [/m?cs_common_module/, 'info-panel']
     ];
-    // panels that list people, players, dramas and similar: the type of their items
-    const LIST_PANELS = {'same-name-people': 'person', 'smart-block': 'smart-block-item', 'ranking': 'ranking-item'};
+    const FINANCE_HEADINGS = [
+        [/토론방/, 'discussion-posts'], [/리서치/, 'research'], [/전문 콘텐츠/, 'expert-content'], [/ETF/, 'etf-list'],
+        [/함께 찾는/, 'related-stocks'], [/많이 찾는/, 'popular-stocks']
+    ];
+    // panels without a class of their own, by their heading
+    const HEADING_TYPES = [[/출국장/, 'airport-wait-times']];
+    // panels that list people, players, dramas, stocks and similar: the type of their items
+    const LIST_PANELS = {
+        'same-name-people': 'person', 'smart-block': 'smart-block-item', 'ranking': 'ranking-item',
+        'related-stocks': 'asset', 'popular-stocks': 'asset', 'etf-list': 'etf'
+    };
 
     /**
      * Text without HTML tags and entities, with single spaces
@@ -64,6 +90,8 @@
     const BLOCK_TAGS = /^(DIV|P|LI|UL|OL|DL|DT|DD|H[1-6]|SECTION|ARTICLE|HEADER|FOOTER|TABLE|TR|TD|TH|BR)$/;
     // labels for screen readers ("새 창 링크") and the closed ad information layers
     const LABEL_CLASSES = /(^|\s)(blind|place_blind|ly_api_info)(\s|$)/;
+    // controls such as the Keep button ("문서 저장하기 Keep에 저장 Keep 바로가기"), also with labels
+    const CONTROL_CLASSES = /(^|\s)(api_save_group|_keep_wrap)(\s|$)/;
 
     /**
      * The text of an element, like innerText: without the content of style and
@@ -81,6 +109,7 @@
             if (node.nodeType === 3) {
                 parts.push(node.nodeValue);
             } else if (node.nodeType === 1 && !HIDDEN_TAGS.includes(node.tagName.toUpperCase())
+                && !CONTROL_CLASSES.test(node.getAttribute('class') || '')
                 && (labels || !LABEL_CLASSES.test(node.getAttribute('class') || ''))) {
                 const space = words || BLOCK_TAGS.test(node.tagName);
                 if (space) parts.push(' ');
@@ -261,7 +290,7 @@
             is_ad: fields.is_ad ? 'yes' : 'no',
             publisher: fields.publisher || '',
             gdid: fields.gdid || '',
-            extra: fields.extra && Object.keys(fields.extra).length ? JSON.stringify(fields.extra) : ''
+            extra: fields.extra && Object.values(fields.extra).some(value => value !== undefined) ? JSON.stringify(fields.extra) : ''
         };
     }
 
@@ -777,7 +806,37 @@
                 type: type,
                 title: text_of(title),
                 link: absolute(link.getAttribute('href'), page.url),
-                description: text_of(item.querySelector('.sub_text, .desc'))
+                // the line under the name, or the price and its change (stocks)
+                description: text_of(item.querySelector('.sub_text, .desc, .price_box, .price_area'), {words: true}),
+                extra: {change: /(^|\s)up(\s|$)/.test(item.getAttribute('class') || '') ? 'up' : /(^|\s)down(\s|$)/.test(item.getAttribute('class') || '') ? 'down' : undefined}
+            });
+        });
+    }
+
+    /**
+     * Items of a list block by their links: the first link to the site in each
+     * list item, for example hotels (hotels.naver.com) and tickets (booking.naver.com)
+     */
+    function link_list_rows(page, block, element, type, site) {
+        let rank = 0;
+        const items = Array.from(element.querySelectorAll('li')).filter(item => !item.querySelector('li') && item.querySelector(`a[href*="${site}"]`));
+        return parse_each(items, item => {
+            const links = Array.from(item.querySelectorAll(`a[href*="${site}"]`));
+            const link = links.find(a => text_of(a)) || links[0];
+            const title = text_of(item.querySelector('.name, .title, .tit, strong')) || text_of(link);
+            if (!title) {
+                return null;
+            }
+            const words = text_of(item, {words: true, labels: true});
+            rank++;
+            return make_row(page, block, rank, {
+                type: type,
+                title: title,
+                link: absolute(link.getAttribute('href'), page.url),
+                description: text_of(item, {words: true}).replace(title, '').trim().slice(0, 300),
+                is_ad: has_ad_label(item),
+                // a price range ("40,900 ~ 73,900 원") or one price
+                extra: {price: first_match(words, [/([\d,]*\d\s*~\s*[\d,]*\d)\s*원/], value => value.replace(/\s+/g, '') + '원') || price_of(words)}
             });
         });
     }
@@ -878,6 +937,10 @@
         } else if (/^shs_\w+_root$/.test(element.id)) {
             block.type = 'plus-store';
             rows = product_rows(page, block, element);
+        } else if (element.id === 'place-additional-info-root') {
+            // tickets of a place (예매), for example an amusement park
+            block.type = 'place-tickets';
+            rows = link_list_rows(page, block, element, 'ticket', 'booking.naver.com');
         } else if (element.id === 'place-app-root' || /플레이스/.test(block.title)) {
             block.type = 'places';
             rows = place_rows(page, block, element);
@@ -897,9 +960,42 @@
             });
         } else {
             // the overseas destination panel (해외인기지역) has other class names than the domestic one
+            const by_heading = HEADING_TYPES.find(([pattern]) => pattern.test(block.title));
             block.type = panel_type(element)
-                || (element.querySelector('a[href*="travel.naver.com/overseas/"], a[href*="travel.naver.com/domestic/"]') ? 'travel-destination' : 'unknown');
-            if (LIST_PANELS[block.type]) {
+                || (element.querySelector('a[href*="travel.naver.com/overseas/"], a[href*="travel.naver.com/domestic/"]') ? 'travel-destination' : null)
+                || (by_heading ? by_heading[1] : 'unknown');
+            if (block.type === 'finance') {
+                const finance = FINANCE_HEADINGS.find(([pattern]) => pattern.test(block.title));
+                block.type = finance ? finance[1] : /cs_virtual_asset/.test(element.outerHTML.slice(0, 2000)) ? 'crypto-info' : 'stock-info';
+            }
+            if (block.type === 'brand-search') {
+                // every link of the block goes through Naver's ad server
+                block.is_ad = true;
+                let rank = 0;
+                const seen = new Set();
+                rows = parse_each(element.querySelectorAll('a[href]'), link => {
+                    const title = text_of(link);
+                    const href = absolute(link.getAttribute('href'), page.url);
+                    if (!title || seen.has(href + title)) {
+                        return null;
+                    }
+                    seen.add(href + title);
+                    rank++;
+                    return make_row(page, block, rank, {type: 'brand-link', title: title, link: href, is_ad: true});
+                });
+            } else if (block.type === 'hotels') {
+                rows = link_list_rows(page, block, element, 'hotel', 'hotels.naver.com');
+            } else if (block.type === 'ai-issue-briefing') {
+                // an AI summary of the news about a stock or coin; its sources are news articles
+                const sources = Array.from(element.querySelectorAll('a[href^="http"]')).map(link => link.getAttribute('href'))
+                    .filter(link => !/keep\.naver\.com|stock\.naver\.com/.test(link));
+                rows = [make_row(page, block, 0, {
+                    title: text_of(element.querySelector('.stock_tit')) || block.title,
+                    description: text_of(element).slice(0, 2000),
+                    link: sources[0] || '',
+                    extra: {ai_generated: true, source_urls: [...new Set(sources)]}
+                })];
+            } else if (LIST_PANELS[block.type]) {
                 rows = panel_list_rows(page, block, element, LIST_PANELS[block.type]);
             }
         }
@@ -910,7 +1006,7 @@
                 title: block.title,
                 description: text_of(element).slice(0, 1000),
                 link: link ? link.getAttribute('href') : '',
-                is_ad: block.type === 'ads'
+                is_ad: block.type === 'ads' || !!block.is_ad
             })];
         }
         return rows;
