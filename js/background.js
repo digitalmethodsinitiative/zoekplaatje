@@ -64,6 +64,14 @@ window.zoekplaatje = {
      * @param details  Request details
      */
     listener: function (details) {
+        // a page that is not loaded in a tab is not a page that the user sees,
+        // e.g. one that Firefox loads in a hidden browser for the thumbnails of
+        // the new-tab page. Data requests without a tab (e.g. from a service
+        // worker for a page in a tab) are still parsed.
+        if (details.tabId < 0 && details.type === 'main_frame') {
+            return {};
+        }
+
         let filter = browser.webRequest.filterResponseData(details.requestId);
         let decoder = new TextDecoder("utf-8");
         let full_response = '';
