@@ -176,6 +176,34 @@
             margin-right: 0.25em;
         }
 
+        .download-dropdown {
+            display: inline-block;
+            position: relative;
+        }
+
+        .download-menu {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 0.25em);
+            z-index: 5;
+            padding: 0.25em;
+            background: var(--panel-background);
+            border: 2px solid var(--accent);
+            border-radius: 0.5em;
+            box-shadow: 0 0 10px #000;
+            white-space: nowrap;
+        }
+
+        .download-menu button {
+            display: block;
+            width: 100%;
+            text-align: left;
+        }
+
+        .download-menu button:not(:last-child) {
+            margin-bottom: 0.25em;
+        }
+
         input:not([type=checkbox]):not([type=radio]), button {
             background: var(--neutral-contrast-alt);
             color: var(--accent);
@@ -230,6 +258,15 @@
         }
 
         #upload-status {
+            text-align: center;
+        }
+
+        #export-message {
+            margin: 0 1em 1em 1em;
+            padding: 0.25em 0.5em;
+            border: 2px solid var(--accent);
+            border-radius: 0.5em;
+            background: var(--neutral);
             text-align: center;
         }
 
@@ -397,6 +434,7 @@
             </table>
             <button class="reset-all"><i class="fa fa-times"></i> Clear all</button>
         </div>
+        <p id="export-message" role="status" aria-hidden="true"></p>
     </section>
     <section id="disclaimer">
         Result capture may be incomplete or break as search engines change their interface. Always verify captured data by cross-referencing it with what you see in your browser.
@@ -419,5 +457,6 @@
     <button class="popup-close">close</button>
 </div>
 <script type="text/javascript" src="tooltips.js"></script>
+<script type="text/javascript" src="../inc/write-excel-file-4.1.1.min.js"></script>
 <script type="text/javascript" src="interface.js"></script>
 </body>

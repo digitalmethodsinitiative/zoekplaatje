@@ -52,10 +52,10 @@ function createElement(tag, attributes={}, content=undefined) {
 function activate_buttons() {
     document.querySelectorAll("td button").forEach(button => {
         let current = button.disabled;
-        let items = parseInt(button.parentNode.parentNode.querySelector('.num-items').innerText);
+        let items = parseInt(button.closest('tr').querySelector('.num-items').innerText);
         let new_status = current;
 
-        if(button.classList.contains('download-csv') || button.classList.contains('reset') || button.classList.contains('preview')) {
+        if(button.matches('.download, .download-csv, .download-xlsx, .reset, .preview')) {
             new_status = !(items > 0);
         }
 
@@ -132,17 +132,27 @@ async function get_stats() {
             let actions = createElement("td");
             let clear_button = createElement("button", {"data-platform": platform, "class": "reset"}, " Clear");
             let preview_button = createElement("button", {"data-platform": platform, "class": "preview"}, " View");
-            let download_button = createElement("button", {
-                "data-platform": platform,
-                "class": "download-csv"
-            }, " .csv");
             clear_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-times'}));
             preview_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-table'}));
+
+            // download button with a menu of the file formats
+            let download_button = createElement("button", {
+                "class": "download",
+                "aria-haspopup": "true",
+                "aria-expanded": "false"
+            }, " Download ");
             download_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
+            download_button.insertAdjacentElement('beforeend', createElement('i', {class: 'fa fa-caret-down'}));
+            let download_menu = createElement("div", {"class": "download-menu", "aria-hidden": "true"});
+            download_menu.appendChild(createElement("button", {"data-platform": platform, "class": "download-csv"}, ".csv"));
+            download_menu.appendChild(createElement("button", {"data-platform": platform, "class": "download-xlsx"}, ".xlsx (Excel)"));
+            let download_dropdown = createElement("div", {"class": "download-dropdown"});
+            download_dropdown.appendChild(download_button);
+            download_dropdown.appendChild(download_menu);
 
             actions.appendChild(clear_button);
             actions.appendChild(preview_button);
-            actions.appendChild(download_button);
+            actions.appendChild(download_dropdown);
 
             row.appendChild(actions);
             document.querySelector("#item-table tbody").appendChild(row);
@@ -168,12 +178,23 @@ async function get_stats() {
  */
 async function button_handler(event) {
     let status = document.getElementById('upload-status');
+    // a click on the icon in a button is a click on the button
+    const target = event.target.closest('button') || event.target;
 
-    if (event.target.matches('.popup-close')) {
+    // a click closes the open download menus, except the one whose button
+    // was clicked: that one opens or closes below
+    close_download_menus(target);
+
+    // a disabled button does nothing, also when its icon was clicked
+    if (target.disabled) {
+        return;
+    }
+
+    if (target.matches('.popup-close')) {
         document.querySelector('#popup').setAttribute('aria-hidden', 'true');
 
-    } else if (event.target.matches('.preview')) {
-        const platform = event.target.getAttribute('data-platform');
+    } else if (target.matches('.preview')) {
+        const platform = target.getAttribute('data-platform');
         const entries = await get_results(platform);
         const popup = document.querySelector('#popup table');
         popup.textContent = '';
@@ -198,30 +219,49 @@ async function button_handler(event) {
         document.querySelector('#popup').setAttribute('aria-hidden', 'false');
 
 
-    } else if (event.target.matches('.reset')) {
-        let platform = event.target.getAttribute('data-platform');
+    } else if (target.matches('.reset')) {
+        let platform = target.getAttribute('data-platform');
         await background.db.items.where("source_platform").equals(platform).delete();
 
-    } else if (event.target.matches('.reset-all')) {
+    } else if (target.matches('.reset-all')) {
         await background.db.items.clear();
 
-    } else if (event.target.matches('.download-csv')) {
-        let platform = event.target.getAttribute('data-platform');
+    } else if (target.matches('.download')) {
+        set_download_menu(target, target.getAttribute('aria-expanded') !== 'true');
+
+    } else if (target.matches('.download-csv, .download-xlsx')) {
+        let platform = target.getAttribute('data-platform');
+        let extension = target.matches('.download-xlsx') ? 'xlsx' : 'csv';
+        let download_button = target.closest('.download-dropdown').querySelector('.download');
         let date = new Date();
-        event.target.classList.add('loading');
+        let stats = {truncated: 0};
+        download_button.classList.add('loading');
+        show_export_message('');
 
-        //let blob = await download_blob(platform, 'zeeschuimer-export-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.ndjson');
-        let blob = await get_blob(platform);
-        let filename = 'zoekplaatje-export-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.csv';
-        await browser.downloads.download({
-            url: window.URL.createObjectURL(blob),
-            filename: filename,
-            conflictAction: 'uniquify'
-        });
+        try {
+            //let blob = await download_blob(platform, 'zeeschuimer-export-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.ndjson');
+            let blob = extension === 'xlsx' ? await get_xlsx_blob(platform, stats) : await get_blob(platform);
+            let filename = 'zoekplaatje-export-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.' + extension;
+            await browser.downloads.download({
+                url: window.URL.createObjectURL(blob),
+                filename: filename,
+                conflictAction: 'uniquify'
+            });
 
-        event.target.classList.remove('loading');
+            if (stats.truncated > 0) {
+                show_export_message(new Intl.NumberFormat().format(stats.truncated)
+                    + (stats.truncated === 1 ? ' value is' : ' values are') + ' longer than '
+                    + new Intl.NumberFormat().format(XLSX_MAX_CELL_CHARS) + ' characters and cut off in the .xlsx file. '
+                    + 'The .csv file has the whole values.');
+            }
+        } catch (error) {
+            console.error(error);
+            show_export_message('The .' + extension + ' file could not be made: ' + error.message);
+        } finally {
+            download_button.classList.remove('loading');
+        }
 
-    } else if(event.target.matches('#clear-history')) {
+    } else if(target.matches('#clear-history')) {
         await background.db.uploads.clear();
         document.querySelector('#clear-history').remove();
         document.querySelectorAll("#upload-table tbody tr").forEach(x => x.remove());
@@ -229,6 +269,45 @@ async function button_handler(event) {
     }
 
     get_stats();
+}
+
+/**
+ * Open or close the menu of file formats of a download button
+ *
+ * @param button  Download button
+ * @param open  Whether to open the menu
+ */
+function set_download_menu(button, open) {
+    // keep the focus on the button when the menu with the focus is hidden
+    if (!open && button.parentNode.contains(document.activeElement)) {
+        button.focus();
+    }
+    button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    button.nextElementSibling.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
+
+/**
+ * Close the open download menus
+ *
+ * @param keep  Download button whose menu is left as it is, if any
+ */
+function close_download_menus(keep=null) {
+    document.querySelectorAll('.download[aria-expanded=true]').forEach(button => {
+        if (button !== keep) {
+            set_download_menu(button, false);
+        }
+    });
+}
+
+/**
+ * Show a message about the last export, or hide the message
+ *
+ * @param text  Message; an empty text hides the message
+ */
+function show_export_message(text) {
+    const message = document.querySelector('#export-message');
+    message.textContent = text;
+    message.setAttribute('aria-hidden', text ? 'false' : 'true');
 }
 
 async function get_results(platform) {
@@ -324,6 +403,72 @@ function csv_value(value) {
         return '"' + value + '"';
     }
     return value;
+}
+
+/**
+ * Limits of an .xlsx file
+ */
+const XLSX_MAX_ROWS = 1048576;
+const XLSX_MAX_CELL_CHARS = 32767;
+const XLSX_MAX_SHEET_NAME = 31;
+
+/**
+ * Get an Excel (.xlsx) file of items
+ *
+ * Has the same columns as the CSV file. Every value is a text cell, so Excel
+ * shows a value that starts with = as text and does not run it as a formula.
+ * Throws if there are more items than fit on a sheet.
+ *
+ * @param platform
+ * @param stats  Counts what the file does not hold in full: `truncated` is
+ *               raised by the number of values that are cut off
+ * @returns {Promise<Blob>}
+ */
+async function get_xlsx_blob(platform, stats={truncated: 0}) {
+    const rows = await get_results(platform);
+    const headers = get_headers(rows);
+
+    // the header row takes one of the rows
+    if (rows.length + 1 > XLSX_MAX_ROWS) {
+        throw new Error('Excel files hold at most ' + new Intl.NumberFormat().format(XLSX_MAX_ROWS)
+            + ' rows, and this export has ' + new Intl.NumberFormat().format(rows.length + 1)
+            + '. Use the .csv file instead.');
+    }
+
+    // replace each item by its cells, so that the items and the cells are
+    // not both in memory in full
+    for (let i = 0; i < rows.length; i++) {
+        rows[i] = headers.map(field => xlsx_cell(rows[i][field], stats));
+    }
+    rows.unshift(headers.map(field => ({type: String, value: field, fontWeight: 'bold'})));
+
+    return writeXlsxFile(rows, {sheet: platform.slice(0, XLSX_MAX_SHEET_NAME), stickyRowsCount: 1}).toBlob();
+}
+
+/**
+ * Format a value as an .xlsx text cell
+ *
+ * A cell holds at most 32,767 characters, so a longer value is cut off and
+ * counted in stats.truncated. The CSV file keeps the whole value.
+ *
+ * @param value
+ * @param stats  See get_xlsx_blob
+ * @returns {Object|null}
+ */
+function xlsx_cell(value, stats) {
+    if(value === undefined || value === null) {
+        return null;
+    }
+    let text = String(value);
+    if(text.length > XLSX_MAX_CELL_CHARS) {
+        text = text.slice(0, XLSX_MAX_CELL_CHARS);
+        // do not end on the first half of a surrogate pair
+        if(/[\uD800-\uDBFF]$/.test(text)) {
+            text = text.slice(0, -1);
+        }
+        stats.truncated += 1;
+    }
+    return {type: String, value: text};
 }
 
 /**
@@ -426,4 +571,14 @@ document.addEventListener('DOMContentLoaded', async function () {
     setInterval(get_stats, 1000);
 
     document.addEventListener('click', button_handler);
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            close_download_menus();
+        }
+    });
+    document.addEventListener('focusin', event => {
+        // moving the focus out of a download menu (with the Tab key) closes it
+        const dropdown = event.target.closest('.download-dropdown');
+        close_download_menus(dropdown ? dropdown.querySelector('.download') : null);
+    });
 });
