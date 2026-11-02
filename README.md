@@ -37,12 +37,18 @@ browser toolbar. Click it to open the Zoekplaatje interface. Enable capturing fo
 capture from.
 
 Next, simply search for things as you normally would. While Zoekplaatje is enabled, results will be saved in the 
-background. You can then download the results as a .csv file with the button in the interface when you are done and
-want to inspect the results. Make sure to cross-reference the results with what you see in your browser, at least 
+background. You can then download the results as a .csv or .xlsx (Excel) file with the Download button in the interface
+when you are done and want to inspect the results. Make sure to cross-reference the results with what you see in your browser, at least 
 initially, to understand what data is (and is not!) collected and how it is parsed.
 
-The .csv file uses UTF-8. The `timestamp` column gives the time of capture in UTC, as `YYYY-MM-DD HH:MM:SS`. Values 
-are written as they were captured, so a spreadsheet program may run a value that starts with `=` as a formula.
+Both files have the same columns. The `timestamp` column gives the time of capture in UTC, as `YYYY-MM-DD HH:MM:SS`.
+
+The .csv file uses UTF-8 and has the values exactly as they were captured. A spreadsheet program may run a value that 
+starts with `=` as a formula, and Excel may show non-Latin text (for example Korean) incorrectly, so use the .xlsx file 
+to open the results in Excel or another spreadsheet program. Every value in the .xlsx file is text, so a value that 
+starts with `=` is shown as it is. A cell in an .xlsx file holds at most 32,767 characters, so a longer value is cut 
+off there; the .csv file has the whole value. The .xlsx file is made with 
+[write-excel-file](https://gitlab.com/catamphetamine/write-excel-file) (MIT license).
 
 ## Credits & license
 Zoekplaatje was developed by Stijn Peeters for the [Digital Methods Initiative](https://digitalmethods.net) and is 

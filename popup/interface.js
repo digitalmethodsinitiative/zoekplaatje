@@ -52,10 +52,10 @@ function createElement(tag, attributes={}, content=undefined) {
 function activate_buttons() {
     document.querySelectorAll("td button").forEach(button => {
         let current = button.disabled;
-        let items = parseInt(button.parentNode.parentNode.querySelector('.num-items').innerText);
+        let items = parseInt(button.closest('tr').querySelector('.num-items').innerText);
         let new_status = current;
 
-        if(button.classList.contains('download-csv') || button.classList.contains('reset') || button.classList.contains('preview')) {
+        if(button.matches('.download, .download-csv, .download-xlsx, .reset, .preview')) {
             new_status = !(items > 0);
         }
 
@@ -132,17 +132,27 @@ async function get_stats() {
             let actions = createElement("td");
             let clear_button = createElement("button", {"data-platform": platform, "class": "reset"}, " Clear");
             let preview_button = createElement("button", {"data-platform": platform, "class": "preview"}, " View");
-            let download_button = createElement("button", {
-                "data-platform": platform,
-                "class": "download-csv"
-            }, " .csv");
             clear_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-times'}));
             preview_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-table'}));
+
+            // download button with a menu of the file formats
+            let download_button = createElement("button", {
+                "class": "download",
+                "aria-haspopup": "true",
+                "aria-expanded": "false"
+            }, " Download ");
             download_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
+            download_button.insertAdjacentElement('beforeend', createElement('i', {class: 'fa fa-caret-down'}));
+            let download_menu = createElement("div", {"class": "download-menu", "aria-hidden": "true"});
+            download_menu.appendChild(createElement("button", {"data-platform": platform, "class": "download-csv"}, ".csv"));
+            download_menu.appendChild(createElement("button", {"data-platform": platform, "class": "download-xlsx"}, ".xlsx (Excel)"));
+            let download_dropdown = createElement("div", {"class": "download-dropdown"});
+            download_dropdown.appendChild(download_button);
+            download_dropdown.appendChild(download_menu);
 
             actions.appendChild(clear_button);
             actions.appendChild(preview_button);
-            actions.appendChild(download_button);
+            actions.appendChild(download_dropdown);
 
             row.appendChild(actions);
             document.querySelector("#item-table tbody").appendChild(row);
@@ -168,12 +178,22 @@ async function get_stats() {
  */
 async function button_handler(event) {
     let status = document.getElementById('upload-status');
+    // a click on the icon in a button is a click on the button
+    const target = event.target.closest('button') || event.target;
 
-    if (event.target.matches('.popup-close')) {
+    // a click closes the open download menus, except the one whose button
+    // was clicked: that one opens or closes below
+    document.querySelectorAll('.download[aria-expanded=true]').forEach(button => {
+        if (button !== target) {
+            set_download_menu(button, false);
+        }
+    });
+
+    if (target.matches('.popup-close')) {
         document.querySelector('#popup').setAttribute('aria-hidden', 'true');
 
-    } else if (event.target.matches('.preview')) {
-        const platform = event.target.getAttribute('data-platform');
+    } else if (target.matches('.preview')) {
+        const platform = target.getAttribute('data-platform');
         const entries = await get_results(platform);
         const popup = document.querySelector('#popup table');
         popup.textContent = '';
@@ -198,30 +218,37 @@ async function button_handler(event) {
         document.querySelector('#popup').setAttribute('aria-hidden', 'false');
 
 
-    } else if (event.target.matches('.reset')) {
-        let platform = event.target.getAttribute('data-platform');
+    } else if (target.matches('.reset')) {
+        let platform = target.getAttribute('data-platform');
         await background.db.items.where("source_platform").equals(platform).delete();
 
-    } else if (event.target.matches('.reset-all')) {
+    } else if (target.matches('.reset-all')) {
         await background.db.items.clear();
 
-    } else if (event.target.matches('.download-csv')) {
-        let platform = event.target.getAttribute('data-platform');
+    } else if (target.matches('.download')) {
+        set_download_menu(target, target.getAttribute('aria-expanded') !== 'true');
+
+    } else if (target.matches('.download-csv, .download-xlsx')) {
+        let platform = target.getAttribute('data-platform');
+        let extension = target.matches('.download-xlsx') ? 'xlsx' : 'csv';
+        let download_button = target.closest('.download-dropdown').querySelector('.download');
         let date = new Date();
-        event.target.classList.add('loading');
+        download_button.classList.add('loading');
 
-        //let blob = await download_blob(platform, 'zeeschuimer-export-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.ndjson');
-        let blob = await get_blob(platform);
-        let filename = 'zoekplaatje-export-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.csv';
-        await browser.downloads.download({
-            url: window.URL.createObjectURL(blob),
-            filename: filename,
-            conflictAction: 'uniquify'
-        });
+        try {
+            //let blob = await download_blob(platform, 'zeeschuimer-export-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.ndjson');
+            let blob = extension === 'xlsx' ? await get_xlsx_blob(platform) : await get_blob(platform);
+            let filename = 'zoekplaatje-export-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.' + extension;
+            await browser.downloads.download({
+                url: window.URL.createObjectURL(blob),
+                filename: filename,
+                conflictAction: 'uniquify'
+            });
+        } finally {
+            download_button.classList.remove('loading');
+        }
 
-        event.target.classList.remove('loading');
-
-    } else if(event.target.matches('#clear-history')) {
+    } else if(target.matches('#clear-history')) {
         await background.db.uploads.clear();
         document.querySelector('#clear-history').remove();
         document.querySelectorAll("#upload-table tbody tr").forEach(x => x.remove());
@@ -229,6 +256,17 @@ async function button_handler(event) {
     }
 
     get_stats();
+}
+
+/**
+ * Open or close the menu of file formats of a download button
+ *
+ * @param button  Download button
+ * @param open  Whether to open the menu
+ */
+function set_download_menu(button, open) {
+    button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    button.nextElementSibling.setAttribute('aria-hidden', open ? 'false' : 'true');
 }
 
 async function get_results(platform) {
@@ -324,6 +362,46 @@ function csv_value(value) {
         return '"' + value + '"';
     }
     return value;
+}
+
+/**
+ * Get an Excel (.xlsx) file of items
+ *
+ * Has the same columns as the CSV file. Every value is a text cell, so Excel
+ * shows a value that starts with = as text and does not run it as a formula.
+ *
+ * @param platform
+ * @returns {Promise<Blob>}
+ */
+async function get_xlsx_blob(platform) {
+    const results = await get_results(platform);
+    const headers = get_headers(results);
+
+    const rows = [headers.map(field => ({type: String, value: field, fontWeight: 'bold'}))];
+    for (let i = 0; i < results.length; i++) {
+        rows.push(headers.map(field => xlsx_cell(results[i][field])));
+        // drop the row once it is converted, as in get_blob
+        results[i] = null;
+    }
+
+    // sheet names are at most 31 characters
+    return writeXlsxFile(rows, {sheet: platform.slice(0, 31), stickyRowsCount: 1}).toBlob();
+}
+
+/**
+ * Format a value as an .xlsx text cell
+ *
+ * A cell holds at most 32,767 characters, so a longer value is cut off. The
+ * CSV file keeps the whole value.
+ *
+ * @param value
+ * @returns {Object|null}
+ */
+function xlsx_cell(value) {
+    if(value === undefined || value === null) {
+        return null;
+    }
+    return {type: String, value: String(value).slice(0, 32767)};
 }
 
 /**
@@ -426,4 +504,9 @@ document.addEventListener('DOMContentLoaded', async function () {
     setInterval(get_stats, 1000);
 
     document.addEventListener('click', button_handler);
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            document.querySelectorAll('.download[aria-expanded=true]').forEach(button => set_download_menu(button, false));
+        }
+    });
 });
