@@ -183,11 +183,12 @@ async function button_handler(event) {
 
     // a click closes the open download menus, except the one whose button
     // was clicked: that one opens or closes below
-    document.querySelectorAll('.download[aria-expanded=true]').forEach(button => {
-        if (button !== target) {
-            set_download_menu(button, false);
-        }
-    });
+    close_download_menus(target);
+
+    // a disabled button does nothing, also when its icon was clicked
+    if (target.disabled) {
+        return;
+    }
 
     if (target.matches('.popup-close')) {
         document.querySelector('#popup').setAttribute('aria-hidden', 'true');
@@ -233,17 +234,29 @@ async function button_handler(event) {
         let extension = target.matches('.download-xlsx') ? 'xlsx' : 'csv';
         let download_button = target.closest('.download-dropdown').querySelector('.download');
         let date = new Date();
+        let stats = {truncated: 0};
         download_button.classList.add('loading');
+        show_export_message('');
 
         try {
             //let blob = await download_blob(platform, 'zeeschuimer-export-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.ndjson');
-            let blob = extension === 'xlsx' ? await get_xlsx_blob(platform) : await get_blob(platform);
+            let blob = extension === 'xlsx' ? await get_xlsx_blob(platform, stats) : await get_blob(platform);
             let filename = 'zoekplaatje-export-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.' + extension;
             await browser.downloads.download({
                 url: window.URL.createObjectURL(blob),
                 filename: filename,
                 conflictAction: 'uniquify'
             });
+
+            if (stats.truncated > 0) {
+                show_export_message(new Intl.NumberFormat().format(stats.truncated)
+                    + (stats.truncated === 1 ? ' value is' : ' values are') + ' longer than '
+                    + new Intl.NumberFormat().format(XLSX_MAX_CELL_CHARS) + ' characters and cut off in the .xlsx file. '
+                    + 'The .csv file has the whole values.');
+            }
+        } catch (error) {
+            console.error(error);
+            show_export_message('The .' + extension + ' file could not be made: ' + error.message);
         } finally {
             download_button.classList.remove('loading');
         }
@@ -265,8 +278,36 @@ async function button_handler(event) {
  * @param open  Whether to open the menu
  */
 function set_download_menu(button, open) {
+    // keep the focus on the button when the menu with the focus is hidden
+    if (!open && button.parentNode.contains(document.activeElement)) {
+        button.focus();
+    }
     button.setAttribute('aria-expanded', open ? 'true' : 'false');
     button.nextElementSibling.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
+
+/**
+ * Close the open download menus
+ *
+ * @param keep  Download button whose menu is left as it is, if any
+ */
+function close_download_menus(keep=null) {
+    document.querySelectorAll('.download[aria-expanded=true]').forEach(button => {
+        if (button !== keep) {
+            set_download_menu(button, false);
+        }
+    });
+}
+
+/**
+ * Show a message about the last export, or hide the message
+ *
+ * @param text  Message; an empty text hides the message
+ */
+function show_export_message(text) {
+    const message = document.querySelector('#export-message');
+    message.textContent = text;
+    message.setAttribute('aria-hidden', text ? 'false' : 'true');
 }
 
 async function get_results(platform) {
@@ -365,43 +406,69 @@ function csv_value(value) {
 }
 
 /**
+ * Limits of an .xlsx file
+ */
+const XLSX_MAX_ROWS = 1048576;
+const XLSX_MAX_CELL_CHARS = 32767;
+const XLSX_MAX_SHEET_NAME = 31;
+
+/**
  * Get an Excel (.xlsx) file of items
  *
  * Has the same columns as the CSV file. Every value is a text cell, so Excel
  * shows a value that starts with = as text and does not run it as a formula.
+ * Throws if there are more items than fit on a sheet.
  *
  * @param platform
+ * @param stats  Counts what the file does not hold in full: `truncated` is
+ *               raised by the number of values that are cut off
  * @returns {Promise<Blob>}
  */
-async function get_xlsx_blob(platform) {
-    const results = await get_results(platform);
-    const headers = get_headers(results);
+async function get_xlsx_blob(platform, stats={truncated: 0}) {
+    const rows = await get_results(platform);
+    const headers = get_headers(rows);
 
-    const rows = [headers.map(field => ({type: String, value: field, fontWeight: 'bold'}))];
-    for (let i = 0; i < results.length; i++) {
-        rows.push(headers.map(field => xlsx_cell(results[i][field])));
-        // drop the row once it is converted, as in get_blob
-        results[i] = null;
+    // the header row takes one of the rows
+    if (rows.length + 1 > XLSX_MAX_ROWS) {
+        throw new Error('Excel files hold at most ' + new Intl.NumberFormat().format(XLSX_MAX_ROWS)
+            + ' rows, and this export has ' + new Intl.NumberFormat().format(rows.length + 1)
+            + '. Use the .csv file instead.');
     }
 
-    // sheet names are at most 31 characters
-    return writeXlsxFile(rows, {sheet: platform.slice(0, 31), stickyRowsCount: 1}).toBlob();
+    // replace each item by its cells, so that the items and the cells are
+    // not both in memory in full
+    for (let i = 0; i < rows.length; i++) {
+        rows[i] = headers.map(field => xlsx_cell(rows[i][field], stats));
+    }
+    rows.unshift(headers.map(field => ({type: String, value: field, fontWeight: 'bold'})));
+
+    return writeXlsxFile(rows, {sheet: platform.slice(0, XLSX_MAX_SHEET_NAME), stickyRowsCount: 1}).toBlob();
 }
 
 /**
  * Format a value as an .xlsx text cell
  *
- * A cell holds at most 32,767 characters, so a longer value is cut off. The
- * CSV file keeps the whole value.
+ * A cell holds at most 32,767 characters, so a longer value is cut off and
+ * counted in stats.truncated. The CSV file keeps the whole value.
  *
  * @param value
+ * @param stats  See get_xlsx_blob
  * @returns {Object|null}
  */
-function xlsx_cell(value) {
+function xlsx_cell(value, stats) {
     if(value === undefined || value === null) {
         return null;
     }
-    return {type: String, value: String(value).slice(0, 32767)};
+    let text = String(value);
+    if(text.length > XLSX_MAX_CELL_CHARS) {
+        text = text.slice(0, XLSX_MAX_CELL_CHARS);
+        // do not end on the first half of a surrogate pair
+        if(/[\uD800-\uDBFF]$/.test(text)) {
+            text = text.slice(0, -1);
+        }
+        stats.truncated += 1;
+    }
+    return {type: String, value: text};
 }
 
 /**
@@ -506,7 +573,12 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.addEventListener('click', button_handler);
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
-            document.querySelectorAll('.download[aria-expanded=true]').forEach(button => set_download_menu(button, false));
+            close_download_menus();
         }
+    });
+    document.addEventListener('focusin', event => {
+        // moving the focus out of a download menu (with the Tab key) closes it
+        const dropdown = event.target.closest('.download-dropdown');
+        close_download_menus(dropdown ? dropdown.querySelector('.download') : null);
     });
 });

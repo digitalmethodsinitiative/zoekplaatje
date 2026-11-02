@@ -261,6 +261,15 @@
             text-align: center;
         }
 
+        #export-message {
+            margin: 0 1em 1em 1em;
+            padding: 0.25em 0.5em;
+            border: 2px solid var(--accent);
+            border-radius: 0.5em;
+            background: var(--neutral);
+            text-align: center;
+        }
+
         .tooltippable:not(a):not(button) {
             display: inline-block;
             background: var(--accent);
@@ -425,6 +434,7 @@
             </table>
             <button class="reset-all"><i class="fa fa-times"></i> Clear all</button>
         </div>
+        <p id="export-message" role="status" aria-hidden="true"></p>
     </section>
     <section id="disclaimer">
         Result capture may be incomplete or break as search engines change their interface. Always verify captured data by cross-referencing it with what you see in your browser.

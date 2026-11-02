@@ -47,8 +47,10 @@ The .csv file uses UTF-8 and has the values exactly as they were captured. A spr
 starts with `=` as a formula, and Excel may show non-Latin text (for example Korean) incorrectly, so use the .xlsx file 
 to open the results in Excel or another spreadsheet program. Every value in the .xlsx file is text, so a value that 
 starts with `=` is shown as it is. A cell in an .xlsx file holds at most 32,767 characters, so a longer value is cut 
-off there; the .csv file has the whole value. The .xlsx file is made with 
-[write-excel-file](https://gitlab.com/catamphetamine/write-excel-file) (MIT license).
+off there (Zoekplaatje tells you when that happens); the .csv file has the whole value. A sheet holds at most 
+1,048,576 rows, so for more results than that, only the .csv file can be made. The .xlsx file is made with 
+[write-excel-file](https://gitlab.com/catamphetamine/write-excel-file) (MIT license, with one small change; see 
+`inc/README.md`).
 
 ## Credits & license
 Zoekplaatje was developed by Stijn Peeters for the [Digital Methods Initiative](https://digitalmethods.net) and is 
