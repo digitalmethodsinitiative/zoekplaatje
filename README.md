@@ -35,8 +35,8 @@ debugging console](https://www.youtube.com/watch?v=J7el77F1ckg) after cloning th
 
 ## How to use
 Install the browser extension in a Firefox browser. A button with the Zoekplaatje logo (a silhouette) will appear in the 
-browser toolbar. Click it to open the Zoekplaatje interface. Enable capturing for the search engines you want to 
-capture from.
+browser toolbar. Click it to see what Zoekplaatje captured on the current page, and to open the Zoekplaatje interface. 
+Enable capturing for the search engines you want to capture from.
 
 Next, simply search for things as you normally would. While Zoekplaatje is enabled, results will be saved in the 
 background. You can then download the results as a .csv file with the button in the interface when you are done and
@@ -46,12 +46,17 @@ initially, to understand what data is (and is not!) collected and how it is pars
 The .csv file uses UTF-8. The `timestamp` column gives the time of capture in UTC, as `YYYY-MM-DD HH:MM:SS`. Values 
 are written as they were captured, so a spreadsheet program may run a value that starts with `=` as a formula.
 
-The `pages` button downloads a second .csv file with one row for each page view on which results were captured. The 
-`page_id` column connects it to the results file. Each page has its URL, query, results page, the time of the first and 
-last capture, the number of rows, and run details: the version of Zoekplaatje, the browser, the languages that Firefox 
-asked for (`accept_language`), the time zone and the size of the window and the page. In the Settings tab you can also 
+The Download button saves two .csv files with the same time in their names. The results file (`zoekplaatje-export-…`) 
+has one row for each result. The pages file (`zoekplaatje-pages-…`) has one row for each page view on which results 
+were captured. The `page_id` column connects the two files. Each page has its URL, query, results page, the time of the 
+first and last capture, the number of rows, and the files of its screenshots and archive.
+
+Both files also have the run details of each page, in the columns that start with `capture_`. These columns describe the 
+browser and the capture, not the search engine: the version of Zoekplaatje, the browser, the languages that Firefox asked 
+for (`capture_accept_language`), the time zone, and the size of the window and the page. In the Settings tab you can also 
 save the privacy settings of Firefox, the country of your internet connection (found with Cloudflare), the IP address, 
-and a list of your other add-ons. These settings are off by default.
+and a list of your other add-ons. These settings are off by default, and apply to the pages captured after you turn them 
+on.
 
 Also in the Settings tab: screenshots and an archive, off by default. With screenshots on, Zoekplaatje saves a 
 full-page screenshot of each page with captured results, a few seconds after the page loads (optionally after 

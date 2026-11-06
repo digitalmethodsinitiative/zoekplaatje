@@ -53,13 +53,10 @@ function activate_buttons() {
     document.querySelectorAll("td button").forEach(button => {
         let current = button.disabled;
         let items = parseInt(button.parentNode.parentNode.querySelector('.num-items').innerText);
-        let pages = parseInt(button.parentNode.parentNode.querySelector('.num-pages').getAttribute('data-pages'));
         let new_status = current;
 
         if(button.classList.contains('download-csv') || button.classList.contains('reset') || button.classList.contains('preview')) {
             new_status = !(items > 0);
-        } else if(button.classList.contains('download-pages')) {
-            new_status = !(pages > 0);
         }
 
         if(new_status !== current) {
@@ -142,37 +139,27 @@ async function get_stats() {
 
             row.appendChild(createElement("td", {}, createElement('div', {'class': 'toggle-switch'}, checker)));
             row.appendChild(createElement("td", {}, createElement('a', {'href': 'https://' + platform}, platform_map[platform])));
-            let download_button = createElement("button", {
-                "data-platform": platform,
-                "class": "download-csv"
-            }, " .csv");
-            download_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
-            let count = createElement("td");
-            count.appendChild(createElement("span", {"class": "num-items"}, new Intl.NumberFormat().format(response[platform])));
-            count.appendChild(download_button);
-            row.appendChild(count);
-
+            row.appendChild(createElement("td", {}, createElement("span", {"class": "num-items"}, new Intl.NumberFormat().format(response[platform]))));
             // the page records: one row for each page view, with the run details
-            let pages_cell = createElement("td");
-            let pages_button = createElement("button", {
-                "data-platform": platform,
-                "class": "download-pages",
-                "title": "One row for each page, with the run details"
-            }, " .csv");
-            pages_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
-            pages_cell.appendChild(createElement("span", {"class": "num-pages", "data-pages": pages[platform]}, pages_text));
-            pages_cell.appendChild(pages_button);
-            row.appendChild(pages_cell);
+            row.appendChild(createElement("td", {}, createElement("span", {"class": "num-pages", "data-pages": pages[platform]}, pages_text)));
             row.appendChild(createElement("td", {}, createElement("span", {"class": "num-screenshots"}, screenshots_text)));
 
             let actions = createElement("td");
             let clear_button = createElement("button", {"data-platform": platform, "class": "reset"}, " Clear");
             let preview_button = createElement("button", {"data-platform": platform, "class": "preview"}, " View");
+            // the results file, and the pages file if there are page records
+            let download_button = createElement("button", {
+                "data-platform": platform,
+                "class": "download-csv",
+                "title": "The results (.csv) and the pages with their run details (.csv)"
+            }, " Download");
             clear_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-times'}));
             preview_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-table'}));
+            download_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
 
             actions.appendChild(clear_button);
             actions.appendChild(preview_button);
+            actions.appendChild(download_button);
 
             row.appendChild(actions);
             document.querySelector("#item-table tbody").appendChild(row);
@@ -217,19 +204,6 @@ async function button_handler(event) {
         const tab = event.target.getAttribute('data-tab');
         document.querySelectorAll('.tab').forEach(button => button.classList.toggle('on', button === event.target));
         document.querySelectorAll('.tab-section').forEach(section => section.setAttribute('aria-hidden', section.id === tab ? 'false' : 'true'));
-
-    } else if (event.target.matches('.download-pages')) {
-        let platform = event.target.getAttribute('data-platform');
-        let date = new Date();
-        event.target.classList.add('loading');
-        let blob = await get_pages_blob(platform);
-        let filename = 'zoekplaatje-pages-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.csv';
-        await browser.downloads.download({
-            url: window.URL.createObjectURL(blob),
-            filename: filename,
-            conflictAction: 'uniquify'
-        });
-        event.target.classList.remove('loading');
 
     } else if (event.target.matches('.preview')) {
         const platform = event.target.getAttribute('data-platform');
@@ -279,6 +253,14 @@ async function button_handler(event) {
             filename: filename,
             conflictAction: 'uniquify'
         });
+        // the pages file, with the same time in its name
+        if (await background.db.pages.where('source_platform').equals(platform).count() > 0) {
+            await browser.downloads.download({
+                url: window.URL.createObjectURL(await get_pages_blob(platform)),
+                filename: 'zoekplaatje-pages-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.csv',
+                conflictAction: 'uniquify'
+            });
+        }
 
         event.target.classList.remove('loading');
 
@@ -294,9 +276,12 @@ async function button_handler(event) {
 
 async function get_results(platform) {
     let results = [];
+    // the page records of the rows, for their run details
+    const pages = new Map((await background.db.pages.where('source_platform').equals(platform).toArray())
+        .map(page => [page.nav_index, page]));
 
     await iterate_items(platform, function(item) {
-        results.push(export_row(item))
+        results.push(export_row(item, pages.get(item['nav_index'])))
     });
 
     return results;
@@ -310,9 +295,10 @@ async function get_results(platform) {
  * an older version stored with a local 12-hour time.
  *
  * @param item  Item as stored in the database
+ * @param page  Page record of the item, if there is one: its run details are added
  * @returns {Object}
  */
-function export_row(item) {
+function export_row(item, page) {
     const row = {...item['data']};
     if (item['timestamp_collected']) {
         row['timestamp'] = utc_time(item['timestamp_collected']);
@@ -321,7 +307,7 @@ function export_row(item) {
     if (!('page_id' in row) && item['nav_index']) {
         row['page_id'] = item['nav_index'];
     }
-    return row;
+    return Object.assign(row, run_details(page));
 }
 
 function utc_time(milliseconds) {
@@ -329,14 +315,41 @@ function utc_time(milliseconds) {
 }
 
 /**
+ * Run details: how the browser was set up when it loaded a page (see
+ * js/pages.js). Both export files give them a prefix, so that nobody takes them
+ * for data of the search engine. In this order; field names of the page record.
+ */
+const RUN_PREFIX = 'capture_';
+const RUN_FIELDS = ['extension_version', 'user_agent', 'accept_language', 'languages', 'time_zone', 'utc_offset',
+    'window_width', 'window_height', 'page_width', 'page_height', 'device_pixel_ratio', 'screen_width', 'screen_height',
+    'ip_country', 'ip_datacenter', 'ip']
+    .concat(Object.keys(background.zoekplaatje.pages.PRIVACY_SETTINGS), ['extensions']);
+// 'extension_version' is the version of Zoekplaatje, not of the other add-ons in 'extensions'
+const RUN_NAMES = {'extension_version': 'zoekplaatje_version'};
+const RUN_COLUMNS = RUN_FIELDS.map(field => RUN_PREFIX + (RUN_NAMES[field] || field));
+
+/**
+ * The run details of a page record, as export columns
+ *
+ * @param page  Page record, or undefined (rows from before page records)
+ * @returns {Object}
+ */
+function run_details(page) {
+    const details = {};
+    RUN_FIELDS.forEach((field, i) => {
+        if (page && page[field] !== undefined) {
+            details[RUN_COLUMNS[i]] = page[field];
+        }
+    });
+    return details;
+}
+
+/**
  * Fields of page records, in this order in the pages file; other fields (the
  * fields that a module adds) follow
  */
 const PAGE_FIELDS = ['page_id', 'engine', 'query', 'results_page', 'url', 'captured_at', 'last_captured_at', 'rows', 'blocks',
-    'problems', 'screenshot_files', 'screenshot_status', 'archive_files',
-    'extension_version', 'user_agent', 'accept_language', 'languages', 'time_zone', 'utc_offset',
-    'window_width', 'window_height', 'page_width', 'page_height', 'device_pixel_ratio', 'screen_width', 'screen_height',
-    'ip_country', 'ip_datacenter', 'ip', 'extensions'];
+    'problems', 'screenshot_files', 'screenshot_status', 'archive_files'].concat(RUN_COLUMNS);
 
 /**
  * Row for a page record, as the pages file shows it
@@ -346,6 +359,8 @@ const PAGE_FIELDS = ['page_id', 'engine', 'query', 'results_page', 'url', 'captu
  */
 function export_page(page) {
     const row = {...page};
+    RUN_FIELDS.forEach(field => delete row[field]);
+    Object.assign(row, run_details(page));
     row['page_id'] = page['nav_index'];
     delete row['nav_index'];
     delete row['source_platform'];
@@ -460,7 +475,8 @@ const COMMON_FIELDS = ['id', 'timestamp', 'source', 'query', 'type', 'domain', '
 
 function get_headers(results) {
     // rows of one engine can have different fields, so use the fields of all
-    // rows: the common fields first, then the others in order of appearance
+    // rows: the common fields first, then the others in order of appearance,
+    // then the run details
     const fields = new Set();
     for (const result of results) {
         for (const field of Object.keys(result)) {
@@ -468,7 +484,8 @@ function get_headers(results) {
         }
     }
     return COMMON_FIELDS.filter(field => fields.has(field))
-        .concat([...fields].filter(field => !COMMON_FIELDS.includes(field)));
+        .concat([...fields].filter(field => !COMMON_FIELDS.includes(field) && !RUN_COLUMNS.includes(field)))
+        .concat(RUN_COLUMNS.filter(field => fields.has(field)));
 }
 /**
  * Get a CSV dump of items
