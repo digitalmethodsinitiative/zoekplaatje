@@ -108,17 +108,25 @@ function update_icon() {
 async function get_stats() {
     let response = [];
     let pages = [];
+    let screenshots = [];
     let platform_map = [];
     Object.keys(background.zoekplaatje.modules).forEach(function(platform) { platform_map[platform] = background.zoekplaatje.modules[platform].name; });
     for(let module in background.zoekplaatje.modules) {
         response[module] = await background.db.items.where("source_platform").equals(module).count();
-        pages[module] = await background.db.pages.where("source_platform").equals(module).count();
+        pages[module] = 0;
+        screenshots[module] = 0;
+        // saved screenshots only, not failed ones
+        await background.db.pages.where("source_platform").equals(module).each(page => {
+            pages[module] += 1;
+            screenshots[module] += (page.screenshots || []).filter(shot => shot.file).length;
+        });
     }
 
     for (let platform in response) {
         let row_id = "stats-" + platform.replace(/[^a-zA-Z0-9]/g, "");
         let new_num_items = parseInt(response[platform]);
-        let pages_text = pages[platform] === 1 ? '1 page' : new Intl.NumberFormat().format(pages[platform]) + ' pages';
+        let pages_text = new Intl.NumberFormat().format(pages[platform]);
+        let screenshots_text = new Intl.NumberFormat().format(screenshots[platform]);
         if(!document.querySelector("#" + row_id)) {
             let toggle_field = 'zs-enabled-' + platform;
             let enabled = await background.browser.storage.local.get([toggle_field])
@@ -134,33 +142,37 @@ async function get_stats() {
 
             row.appendChild(createElement("td", {}, createElement('div', {'class': 'toggle-switch'}, checker)));
             row.appendChild(createElement("td", {}, createElement('a', {'href': 'https://' + platform}, platform_map[platform])));
-            let count = createElement("td");
-            count.appendChild(createElement("span", {"class": "num-items"}, new Intl.NumberFormat().format(response[platform])));
-            count.appendChild(createElement("span", {"class": "num-pages", "data-pages": pages[platform]}, pages_text));
-            row.appendChild(count);
-
-            let actions = createElement("td");
-            let clear_button = createElement("button", {"data-platform": platform, "class": "reset"}, " Clear");
-            let preview_button = createElement("button", {"data-platform": platform, "class": "preview"}, " View");
             let download_button = createElement("button", {
                 "data-platform": platform,
                 "class": "download-csv"
             }, " .csv");
+            download_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
+            let count = createElement("td");
+            count.appendChild(createElement("span", {"class": "num-items"}, new Intl.NumberFormat().format(response[platform])));
+            count.appendChild(download_button);
+            row.appendChild(count);
+
             // the page records: one row for each page view, with the run details
+            let pages_cell = createElement("td");
             let pages_button = createElement("button", {
                 "data-platform": platform,
                 "class": "download-pages",
                 "title": "One row for each page, with the run details"
-            }, " pages");
+            }, " .csv");
+            pages_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
+            pages_cell.appendChild(createElement("span", {"class": "num-pages", "data-pages": pages[platform]}, pages_text));
+            pages_cell.appendChild(pages_button);
+            row.appendChild(pages_cell);
+            row.appendChild(createElement("td", {}, createElement("span", {"class": "num-screenshots"}, screenshots_text)));
+
+            let actions = createElement("td");
+            let clear_button = createElement("button", {"data-platform": platform, "class": "reset"}, " Clear");
+            let preview_button = createElement("button", {"data-platform": platform, "class": "preview"}, " View");
             clear_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-times'}));
             preview_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-table'}));
-            download_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
-            pages_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
 
             actions.appendChild(clear_button);
             actions.appendChild(preview_button);
-            actions.appendChild(download_button);
-            actions.appendChild(pages_button);
 
             row.appendChild(actions);
             document.querySelector("#item-table tbody").appendChild(row);
@@ -172,6 +184,10 @@ async function get_stats() {
             if(parseInt(num_pages.getAttribute('data-pages')) !== pages[platform]) {
                 num_pages.setAttribute('data-pages', pages[platform]);
                 num_pages.innerText = pages_text;
+            }
+            const num_screenshots = document.querySelector("#" + row_id + " .num-screenshots");
+            if(num_screenshots.innerText !== screenshots_text) {
+                num_screenshots.innerText = screenshots_text;
             }
         }
     }
@@ -317,7 +333,8 @@ function utc_time(milliseconds) {
  * fields that a module adds) follow
  */
 const PAGE_FIELDS = ['page_id', 'engine', 'query', 'results_page', 'url', 'captured_at', 'last_captured_at', 'rows', 'blocks',
-    'problems', 'extension_version', 'user_agent', 'accept_language', 'languages', 'time_zone', 'utc_offset',
+    'problems', 'screenshot_files', 'screenshot_status', 'archive_files',
+    'extension_version', 'user_agent', 'accept_language', 'languages', 'time_zone', 'utc_offset',
     'window_width', 'window_height', 'page_width', 'page_height', 'device_pixel_ratio', 'screen_width', 'screen_height',
     'ip_country', 'ip_datacenter', 'ip', 'extensions'];
 
@@ -332,12 +349,24 @@ function export_page(page) {
     row['page_id'] = page['nav_index'];
     delete row['nav_index'];
     delete row['source_platform'];
+    // the counter for the numbers in file names
+    delete row['file_count'];
     for (const field of ['captured_at', 'last_captured_at']) {
         if (row[field]) {
             row[field] = utc_time(row[field]);
         }
     }
     row['problems'] = (page['problems'] || []).join('; ');
+    // the files, as paths in the downloads folder; the status of each screenshot ("saved", "cut at ...", "failed: ...")
+    const shots = page['screenshots'] || [];
+    delete row['screenshots'];
+    if (shots.length) {
+        row['screenshot_files'] = shots.filter(shot => shot.file).map(shot => shot.file).join('; ');
+        row['screenshot_status'] = shots.map(shot => shot.trigger + ': ' + shot.status).join('; ');
+    }
+    if (page['archive_files']) {
+        row['archive_files'] = page['archive_files'].join('; ');
+    }
     return row;
 }
 
@@ -399,6 +428,28 @@ async function init_settings() {
         });
     }
     update_dependents();
+
+    // settings with a choice (screenshots, image format): the first option is the default
+    for (const select of document.querySelectorAll('select.setting-choice')) {
+        const value = (await background.browser.storage.local.get([select.name]))[select.name];
+        if (value && Array.from(select.options).some(option => option.value === value)) {
+            select.value = value;
+        }
+        select.addEventListener('change', () => background.browser.storage.local.set({[select.name]: select.value}));
+    }
+}
+
+/**
+ * Show the tab of the window that the address names (#settings), e.g. when the
+ * toolbar popup opens the settings
+ */
+function show_tab_from_address() {
+    const tab = location.hash.replace('#', '') || 'status';
+    const button = document.querySelector(`.tab[data-tab="${tab}"]`);
+    if (button) {
+        document.querySelectorAll('.tab').forEach(other => other.classList.toggle('on', other === button));
+        document.querySelectorAll('.tab-section').forEach(section => section.setAttribute('aria-hidden', section.id === tab ? 'false' : 'true'));
+    }
 }
 
 /**
@@ -567,6 +618,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     get_stats();
     setInterval(get_stats, 1000);
     init_settings();
+    show_tab_from_address();
+    window.addEventListener('hashchange', show_tab_from_address);
 
     document.addEventListener('click', button_handler);
 });

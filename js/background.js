@@ -178,7 +178,7 @@ window.zoekplaatje = {
                 const items = item_list.filter(item => item);
                 // a module can set fields of the page record on its list of items
                 items.page = item_list.page;
-                this.pages.record(module, nav_index, tabId, source_platform_url, items, timestamp_collected);
+                this.pages.record(module, nav_index, tabId, source_platform_url, items, timestamp_collected, response, source_url);
                 await Promise.all(items.map(item => db.items.add({
                     "nav_index": nav_index,
                     "item_id": item["id"],
@@ -203,7 +203,8 @@ window.zoekplaatje = {
         const tabs = await browser.tabs.query({});
         const full_url = browser.runtime.getURL('popup/interface.html');
         const tab = tabs.filter((tab) => {
-            return (tab.url === full_url);
+            // also with a section after the # (e.g. #settings)
+            return (tab.url === full_url || (tab.url || '').startsWith(full_url + '#'));
         });
         return tab[0] || false;
     },
@@ -235,11 +236,17 @@ browser.webNavigation.onCommitted.addListener((details) => {
     zoekplaatje.nav_handler(details.tabId);
 });
 
-browser.browserAction.onClicked.addListener(async () => {
+/**
+ * Show the Zoekplaatje window, in its own tab (from the toolbar popup)
+ *
+ * @param section  Tab of the window to show, e.g. 'settings' (optional)
+ */
+zoekplaatje.open_interface = async function (section) {
+    const url = browser.runtime.getURL('popup/interface.html') + (section ? '#' + section : '');
     let tab = await zoekplaatje.has_tab();
     if (!tab) {
-        browser.tabs.create({url: 'popup/interface.html'});
-    } else if (!tab.active) {
-        browser.tabs.update(tab.id, {active: true});
+        browser.tabs.create({url: url});
+    } else {
+        browser.tabs.update(tab.id, Object.assign({active: true}, section ? {url: url} : {}));
     }
-});
+};

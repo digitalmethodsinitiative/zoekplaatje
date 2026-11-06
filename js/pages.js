@@ -22,7 +22,8 @@ window.zoekplaatje.pages = {
     queue: {},
 
     // fields that only the core sets
-    CORE_FIELDS: ['nav_index', 'source_platform', 'engine', 'url', 'rows', 'captured_at', 'last_captured_at', 'problems'],
+    CORE_FIELDS: ['nav_index', 'source_platform', 'engine', 'url', 'rows', 'captured_at', 'last_captured_at', 'problems',
+        'screenshots', 'archive_files', 'file_count'],
 
     // Firefox privacy settings in the run details: field name, then the setting in the browser.privacy API
     PRIVACY_SETTINGS: {
@@ -67,9 +68,12 @@ window.zoekplaatje.pages = {
      * @param page_url  URL of the page
      * @param items  Items that the module returned
      * @param collected  Time of capture (milliseconds)
+     * @param response  Content of the response (for the archive)
+     * @param source_url  URL of the response
      * @returns {Promise}
      */
-    record: function (module, nav_index, tab_id, page_url, items, collected) {
+    record: function (module, nav_index, tab_id, page_url, items, collected, response, source_url) {
+        let loaded = false;
         return this.run(nav_index, async () => {
             const fields = this.page_fields(items);
             const existing = await db.pages.get(nav_index);
@@ -78,6 +82,7 @@ window.zoekplaatje.pages = {
                     rows: (existing.rows || 0) + items.length,
                     last_captured_at: collected
                 }));
+                await zoekplaatje.files.archive(await db.pages.get(nav_index), response, source_url);
                 return;
             }
             const record = Object.assign({
@@ -93,12 +98,26 @@ window.zoekplaatje.pages = {
                 problems: []
             }, fields, await this.run_details(tab_id));
             await db.pages.put(record);
+            await zoekplaatje.files.archive(record, response, source_url);
             // the sizes of the page need the loaded page; else the load listener measures them
             const tab = tab_id >= 0 ? await browser.tabs.get(tab_id).catch(() => null) : null;
             if (tab && tab.status === 'complete') {
                 await this.measure(nav_index, tab_id);
+                loaded = true;
+            }
+        }).then(() => {
+            // after the work for the record: the screenshot updates the record itself
+            if (loaded) {
+                zoekplaatje.files.automatic(nav_index, tab_id);
             }
         });
+    },
+
+    /**
+     * The navigation index of the page that a tab shows now
+     */
+    current: function (tab_id) {
+        return zoekplaatje.session + ':' + tab_id + ':' + (zoekplaatje.nav_index[tab_id] || 0);
     },
 
     /**
@@ -290,8 +309,9 @@ window.zoekplaatje.pages = {
         if (details.frameId !== 0 || details.tabId < 0) {
             return;
         }
-        const nav_index = zoekplaatje.session + ':' + details.tabId + ':' + (zoekplaatje.nav_index[details.tabId] || 0);
-        this.run(nav_index, () => this.measure(nav_index, details.tabId));
+        const nav_index = this.current(details.tabId);
+        this.run(nav_index, () => this.measure(nav_index, details.tabId))
+            .then(() => zoekplaatje.files.automatic(nav_index, details.tabId));
     },
 
     /**

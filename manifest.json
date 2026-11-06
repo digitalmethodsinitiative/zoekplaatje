@@ -21,7 +21,15 @@
 
   "browser_action": {
     "default_icon": "images/icon-96.png",
-    "default_title": "Zoekplaatje"
+    "default_title": "Zoekplaatje",
+    "default_popup": "popup/popup.html"
+  },
+
+  "commands": {
+    "take-screenshot": {
+      "suggested_key": {"default": "Alt+Shift+Z"},
+      "description": "Take a screenshot of the results page in this tab"
+    }
   },
 
   "permissions": [
@@ -40,6 +48,7 @@
       "inc/lib.js",
       "js/background.js",
       "js/pages.js",
+      "js/files.js",
       "modules/google.js",
       "modules/baidu.js",
       "modules/bing.js",

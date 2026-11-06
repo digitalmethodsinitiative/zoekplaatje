@@ -383,9 +383,12 @@
             background: var(--accent);
             color: var(--neutral);
         }
-        .num-pages {
+        /* the count of a column, above its download button */
+        .num-items, .num-pages {
             display: block;
-            font-size: 0.75em;
+        }
+        #item-table td {
+            white-space: nowrap;
         }
 
         /** settings **/
@@ -398,6 +401,8 @@
         #settings .setting .toggle-switch {
             flex: 0 0 55px;
             margin-top: 0.2em;
+            /* the ON label needs a centered parent, as the cells of the results table */
+            text-align: center;
         }
         #settings .setting p {
             margin: 0;
@@ -408,6 +413,19 @@
         }
         #settings .always {
             font-size: 0.9em;
+        }
+        #settings select {
+            flex: 0 0 auto;
+            max-width: 12em;
+            background: var(--neutral-contrast-alt);
+            color: var(--accent);
+            border: 2px solid var(--accent);
+            border-radius: 0.5em;
+            padding: 0.2em;
+        }
+        #settings h3 {
+            font-size: 1em;
+            margin: 1.5em 0 0.75em 0;
         }
     </style>
     <link rel="shortcut icon" href="/images/icon-96.png">
@@ -431,6 +449,8 @@
                     <th>Enable</th>
                     <th>Engine</th>
                     <th>Results</th>
+                    <th>Pages</th>
+                    <th>Screenshots</th>
                     <th>Actions</th>
                 </tr>
                 </thead>
@@ -465,6 +485,37 @@
             <div class="toggle-switch"><label for="zs-setting-extensions"><input type="checkbox" class="setting-toggle" id="zs-setting-extensions" name="zs-setting-extensions" data-permission="management"><span class="toggle"></span></label></div>
             <p><strong>Save a list of your other add-ons</strong>Their names and versions. An ad blocker, for example,
                 removes ads from the results. Firefox asks you for permission one time.</p>
+        </div>
+        <h3>Screenshots and archive</h3>
+        <p class="always">Files go to your downloads folder, in a folder for each page:
+            zoekplaatje-archives/&lt;search engine&gt;/&lt;time&gt;_&lt;page&gt;_&lt;query&gt;/. The time is when
+            Zoekplaatje first captured the page (UTC). The files of a page are numbered in the order in which they were
+            saved: 001-page.html, 002-screenshot.png, and so on. The pages file names them.</p>
+        <div class="setting">
+            <select id="zs-setting-screenshots" class="setting-choice" name="zs-setting-screenshots">
+                <option value="off">Off</option>
+                <option value="scroll">Full page, after scrolling</option>
+                <option value="no-scroll">Full page, no scrolling</option>
+            </select>
+            <p><strong>Screenshots</strong>One screenshot of each page with captured results, a few seconds after the
+                page loads. With scrolling, Zoekplaatje first scrolls through the page so that all images load,
+                then scrolls back to where you were. The tab must be visible: for a tab in the background, the
+                screenshot waits until you show the tab. To take a screenshot by hand, use the Zoekplaatje button in
+                the toolbar, or press Alt+Shift+Z.</p>
+        </div>
+        <div class="setting">
+            <select id="zs-setting-screenshot-format" class="setting-choice" name="zs-setting-screenshot-format">
+                <option value="png">PNG</option>
+                <option value="jpeg">JPEG</option>
+            </select>
+            <p><strong>Image format</strong>PNG keeps text sharp (2 to 7 MB for a page). JPEG files are smaller.</p>
+        </div>
+        <div class="setting">
+            <div class="toggle-switch"><label for="zs-setting-archive"><input type="checkbox" class="setting-toggle" id="zs-setting-archive" name="zs-setting-archive"><span class="toggle"></span></label></div>
+            <p><strong>Save the page and its data</strong>The HTML of each page as the search engine sent it, and the
+                data that came in later and gave results (for example related searches). These files are the raw data
+                of the captured results. The saved page does not use the data files: if you open it, it loads scripts,
+                images and data from the search engine again. The screenshot shows what the page looked like.</p>
         </div>
     </section>
     <section id="disclaimer">

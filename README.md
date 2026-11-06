@@ -53,6 +53,20 @@ asked for (`accept_language`), the time zone and the size of the window and the 
 save the privacy settings of Firefox, the country of your internet connection (found with Cloudflare), the IP address, 
 and a list of your other add-ons. These settings are off by default.
 
+Also in the Settings tab: screenshots and an archive, off by default. With screenshots on, Zoekplaatje saves a 
+full-page screenshot of each page with captured results, a few seconds after the page loads (optionally after 
+scrolling through the page, so that all images load). With the archive on, it saves the HTML of the page as the search 
+engine sent it (`001-page.html`), and each data response that came later and gave results (the `data_…` files). The saved 
+page does not use these data files. If you open it, your browser loads its scripts, styles and images from the search 
+engine, and blocks that load their content later ask the search engine again. These blocks can be empty or show other 
+content. The screenshot is the record of what the page showed.
+
+The files go to your downloads folder, in `zoekplaatje-archives/<search engine>/<time>_<page>_<query>/`, and the pages 
+file names them. The time is the first capture of the page, in UTC, so a search that you run again gets a new folder. 
+Each file name starts with a number in the order in which Zoekplaatje saved the files, for example `001-page.html`, 
+`002-data_…`, `003-screenshot.png`. The Zoekplaatje button in the toolbar shows what was captured on the current page, and takes a screenshot by hand (also 
+with Alt+Shift+Z).
+
 ## Credits & license
 Zoekplaatje was developed by Stijn Peeters for the [Digital Methods Initiative](https://digitalmethods.net) and is 
 licensed under the Mozilla Public License, 2.0. Refer to the LICENSE file for more information.  It is heavily based on 
