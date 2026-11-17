@@ -3,7 +3,7 @@
   "description": "Collect results while using search engines for later analysis",
   "manifest_version": 2,
   "name": "Zoekplaatje",
-  "version": "1.11",
+  "version": "1.12.90",
   "homepage_url": "https://github.com/digitalmethodsinitiative/zoekplaatje",
 
   "browser_specific_settings": {
@@ -45,7 +45,9 @@
       "modules/najdi.si.js",
       "modules/marginalia.js",
       "modules/seznam.js",
-      "modules/yandex.js"
+      "modules/yandex.js",
+      "modules/naver.js",
+      "modules/daum.js"
     ]
   }
 }
