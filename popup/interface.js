@@ -87,7 +87,8 @@ async function toggle_listening(e) {
  * Update favicon depending on whether capture is enabled
  */
 function update_icon() {
-    const any_enabled = Array.from(document.querySelectorAll('.toggle-switch input')).filter(item => item.checked);
+    // the switches of the search engines, not those of the settings
+    const any_enabled = Array.from(document.querySelectorAll('#item-table .toggle-switch input')).filter(item => item.checked);
     const path = any_enabled.length > 0 ? '/images/icon-96-enabled.png' : '/images/icon-96.png';
     document.querySelector('link[rel~=icon]').setAttribute('href', path);
 }
@@ -103,15 +104,26 @@ function update_icon() {
  */
 async function get_stats() {
     let response = [];
+    let pages = [];
+    let screenshots = [];
     let platform_map = [];
     Object.keys(background.zoekplaatje.modules).forEach(function(platform) { platform_map[platform] = background.zoekplaatje.modules[platform].name; });
     for(let module in background.zoekplaatje.modules) {
         response[module] = await background.db.items.where("source_platform").equals(module).count();
+        pages[module] = 0;
+        screenshots[module] = 0;
+        // saved screenshots only, not failed ones
+        await background.db.pages.where("source_platform").equals(module).each(page => {
+            pages[module] += 1;
+            screenshots[module] += (page.screenshots || []).filter(shot => shot.file).length;
+        });
     }
 
     for (let platform in response) {
         let row_id = "stats-" + platform.replace(/[^a-zA-Z0-9]/g, "");
         let new_num_items = parseInt(response[platform]);
+        let pages_text = new Intl.NumberFormat().format(pages[platform]);
+        let screenshots_text = new Intl.NumberFormat().format(screenshots[platform]);
         if(!document.querySelector("#" + row_id)) {
             let toggle_field = 'zs-enabled-' + platform;
             let enabled = await background.browser.storage.local.get([toggle_field])
@@ -127,15 +139,20 @@ async function get_stats() {
 
             row.appendChild(createElement("td", {}, createElement('div', {'class': 'toggle-switch'}, checker)));
             row.appendChild(createElement("td", {}, createElement('a', {'href': 'https://' + platform}, platform_map[platform])));
-            row.appendChild(createElement("td", {"class": "num-items"}, new Intl.NumberFormat().format(response[platform])));
+            row.appendChild(createElement("td", {}, createElement("span", {"class": "num-items"}, new Intl.NumberFormat().format(response[platform]))));
+            // the page records: one row for each page view, with the run details
+            row.appendChild(createElement("td", {}, createElement("span", {"class": "num-pages", "data-pages": pages[platform]}, pages_text)));
+            row.appendChild(createElement("td", {}, createElement("span", {"class": "num-screenshots"}, screenshots_text)));
 
             let actions = createElement("td");
             let clear_button = createElement("button", {"data-platform": platform, "class": "reset"}, " Clear");
             let preview_button = createElement("button", {"data-platform": platform, "class": "preview"}, " View");
+            // the results file, and the pages file if there are page records
             let download_button = createElement("button", {
                 "data-platform": platform,
-                "class": "download-csv"
-            }, " .csv");
+                "class": "download-csv",
+                "title": "The results (.csv) and the pages with their run details (.csv)"
+            }, " Download");
             clear_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-times'}));
             preview_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-table'}));
             download_button.insertAdjacentElement('afterbegin', createElement('i', {class: 'fa fa-download'}));
@@ -146,8 +163,19 @@ async function get_stats() {
 
             row.appendChild(actions);
             document.querySelector("#item-table tbody").appendChild(row);
-        } else if(new_num_items !== parseInt(document.querySelector("#" + row_id + " .num-items").innerText)) {
-            document.querySelector("#" + row_id + " .num-items").innerText = new Intl.NumberFormat().format(new_num_items);
+        } else {
+            if(new_num_items !== parseInt(document.querySelector("#" + row_id + " .num-items").innerText)) {
+                document.querySelector("#" + row_id + " .num-items").innerText = new Intl.NumberFormat().format(new_num_items);
+            }
+            const num_pages = document.querySelector("#" + row_id + " .num-pages");
+            if(parseInt(num_pages.getAttribute('data-pages')) !== pages[platform]) {
+                num_pages.setAttribute('data-pages', pages[platform]);
+                num_pages.innerText = pages_text;
+            }
+            const num_screenshots = document.querySelector("#" + row_id + " .num-screenshots");
+            if(num_screenshots.innerText !== screenshots_text) {
+                num_screenshots.innerText = screenshots_text;
+            }
         }
     }
 
@@ -171,6 +199,11 @@ async function button_handler(event) {
 
     if (event.target.matches('.popup-close')) {
         document.querySelector('#popup').setAttribute('aria-hidden', 'true');
+
+    } else if (event.target.matches('.tab')) {
+        const tab = event.target.getAttribute('data-tab');
+        document.querySelectorAll('.tab').forEach(button => button.classList.toggle('on', button === event.target));
+        document.querySelectorAll('.tab-section').forEach(section => section.setAttribute('aria-hidden', section.id === tab ? 'false' : 'true'));
 
     } else if (event.target.matches('.preview')) {
         const platform = event.target.getAttribute('data-platform');
@@ -201,9 +234,11 @@ async function button_handler(event) {
     } else if (event.target.matches('.reset')) {
         let platform = event.target.getAttribute('data-platform');
         await background.db.items.where("source_platform").equals(platform).delete();
+        await background.db.pages.where("source_platform").equals(platform).delete();
 
     } else if (event.target.matches('.reset-all')) {
         await background.db.items.clear();
+        await background.db.pages.clear();
 
     } else if (event.target.matches('.download-csv')) {
         let platform = event.target.getAttribute('data-platform');
@@ -218,6 +253,14 @@ async function button_handler(event) {
             filename: filename,
             conflictAction: 'uniquify'
         });
+        // the pages file, with the same time in its name
+        if (await background.db.pages.where('source_platform').equals(platform).count() > 0) {
+            await browser.downloads.download({
+                url: window.URL.createObjectURL(await get_pages_blob(platform)),
+                filename: 'zoekplaatje-pages-' + platform + '-' + date.toISOString().split(".")[0].replace(/:/g, "") + '.csv',
+                conflictAction: 'uniquify'
+            });
+        }
 
         event.target.classList.remove('loading');
 
@@ -233,9 +276,12 @@ async function button_handler(event) {
 
 async function get_results(platform) {
     let results = [];
+    // the page records of the rows, for their run details
+    const pages = new Map((await background.db.pages.where('source_platform').equals(platform).toArray())
+        .map(page => [page.nav_index, page]));
 
     await iterate_items(platform, function(item) {
-        results.push(export_row(item))
+        results.push(export_row(item, pages.get(item['nav_index'])))
     });
 
     return results;
@@ -249,14 +295,176 @@ async function get_results(platform) {
  * an older version stored with a local 12-hour time.
  *
  * @param item  Item as stored in the database
+ * @param page  Page record of the item, if there is one: its run details are added
  * @returns {Object}
  */
-function export_row(item) {
+function export_row(item, page) {
     const row = {...item['data']};
     if (item['timestamp_collected']) {
-        row['timestamp'] = new Date(item['timestamp_collected']).toISOString().replace('T', ' ').slice(0, 19);
+        row['timestamp'] = utc_time(item['timestamp_collected']);
+    }
+    // the page view of the row, as in the pages file (Naver and Daum set it themselves)
+    if (!('page_id' in row) && item['nav_index']) {
+        row['page_id'] = item['nav_index'];
+    }
+    return Object.assign(row, run_details(page));
+}
+
+function utc_time(milliseconds) {
+    return new Date(milliseconds).toISOString().replace('T', ' ').slice(0, 19);
+}
+
+/**
+ * Run details: how the browser was set up when it loaded a page (see
+ * js/pages.js). Both export files give them a prefix, so that nobody takes them
+ * for data of the search engine. In this order; field names of the page record.
+ */
+const RUN_PREFIX = 'capture_';
+const RUN_FIELDS = ['extension_version', 'user_agent', 'accept_language', 'languages', 'time_zone', 'utc_offset',
+    'window_width', 'window_height', 'page_width', 'page_height', 'device_pixel_ratio', 'screen_width', 'screen_height',
+    'ip_country', 'ip_datacenter', 'ip']
+    .concat(Object.keys(background.zoekplaatje.pages.PRIVACY_SETTINGS), ['extensions']);
+// 'extension_version' is the version of Zoekplaatje, not of the other add-ons in 'extensions'
+const RUN_NAMES = {'extension_version': 'zoekplaatje_version'};
+const RUN_COLUMNS = RUN_FIELDS.map(field => RUN_PREFIX + (RUN_NAMES[field] || field));
+
+/**
+ * The run details of a page record, as export columns
+ *
+ * @param page  Page record, or undefined (rows from before page records)
+ * @returns {Object}
+ */
+function run_details(page) {
+    const details = {};
+    RUN_FIELDS.forEach((field, i) => {
+        if (page && page[field] !== undefined) {
+            details[RUN_COLUMNS[i]] = page[field];
+        }
+    });
+    return details;
+}
+
+/**
+ * Fields of page records, in this order in the pages file; other fields (the
+ * fields that a module adds) follow
+ */
+const PAGE_FIELDS = ['page_id', 'engine', 'query', 'results_page', 'url', 'captured_at', 'last_captured_at', 'rows', 'blocks',
+    'problems', 'screenshot_files', 'screenshot_status', 'archive_files'].concat(RUN_COLUMNS);
+
+/**
+ * Row for a page record, as the pages file shows it
+ *
+ * @param page  Page record as stored in the database
+ * @returns {Object}
+ */
+function export_page(page) {
+    const row = {...page};
+    RUN_FIELDS.forEach(field => delete row[field]);
+    Object.assign(row, run_details(page));
+    row['page_id'] = page['nav_index'];
+    delete row['nav_index'];
+    delete row['source_platform'];
+    // the counter for the numbers in file names
+    delete row['file_count'];
+    for (const field of ['captured_at', 'last_captured_at']) {
+        if (row[field]) {
+            row[field] = utc_time(row[field]);
+        }
+    }
+    row['problems'] = (page['problems'] || []).join('; ');
+    // the files, as paths in the downloads folder; the status of each screenshot ("saved", "cut at ...", "failed: ...")
+    const shots = page['screenshots'] || [];
+    delete row['screenshots'];
+    if (shots.length) {
+        row['screenshot_files'] = shots.filter(shot => shot.file).map(shot => shot.file).join('; ');
+        row['screenshot_status'] = shots.map(shot => shot.trigger + ': ' + shot.status).join('; ');
+    }
+    if (page['archive_files']) {
+        row['archive_files'] = page['archive_files'].join('; ');
     }
     return row;
+}
+
+/**
+ * Get a CSV file of the page records of a platform, in order of capture
+ *
+ * @param platform
+ * @returns {Promise<Blob>}
+ */
+async function get_pages_blob(platform) {
+    const pages = (await background.db.pages.where('source_platform').equals(platform).toArray())
+        .sort((a, b) => a.captured_at - b.captured_at).map(export_page);
+    const fields = new Set();
+    pages.forEach(page => Object.keys(page).forEach(field => fields.add(field)));
+    const headers = PAGE_FIELDS.filter(field => fields.has(field)).concat([...fields].filter(field => !PAGE_FIELDS.includes(field)).sort());
+
+    let csv = [headers.map(csv_value).join(','), "\r\n"];
+    for (const page of pages) {
+        csv.push(headers.map(field => csv_value(page[field])).join(','));
+        csv.push("\r\n");
+    }
+    return new Blob(csv, {type: 'text/csv'});
+}
+
+/**
+ * Show the settings as they are stored, and keep them up to date
+ *
+ * A setting that needs a permission (privacy settings, other add-ons) asks
+ * Firefox for it when it is turned on, and stays off if it is not given. The
+ * IP address setting only works with the country lookup.
+ */
+async function init_settings() {
+    const toggles = Array.from(document.querySelectorAll('.setting-toggle'));
+    const stored = await background.browser.storage.local.get(toggles.map(toggle => toggle.name));
+    const update_dependents = () => {
+        for (const toggle of toggles.filter(toggle => toggle.getAttribute('data-requires'))) {
+            const required = document.getElementById(toggle.getAttribute('data-requires'));
+            toggle.disabled = !required.checked;
+        }
+    };
+    for (const toggle of toggles) {
+        toggle.checked = !!parseInt(stored[toggle.name]);
+        const permission = toggle.getAttribute('data-permission');
+        if (toggle.checked && permission && !await browser.permissions.contains({permissions: [permission]})) {
+            // the permission was taken back in the add-ons manager
+            toggle.checked = false;
+            await background.browser.storage.local.set({[toggle.name]: '0'});
+        }
+        toggle.addEventListener('change', async () => {
+            if (toggle.checked && permission) {
+                // must be asked in the event handler of the click
+                const granted = await browser.permissions.request({permissions: [permission]});
+                if (!granted) {
+                    toggle.checked = false;
+                }
+            }
+            await background.browser.storage.local.set({[toggle.name]: toggle.checked ? '1' : '0'});
+            update_dependents();
+        });
+    }
+    update_dependents();
+
+    // settings with a choice (screenshots, image format): the first option is the default
+    for (const select of document.querySelectorAll('select.setting-choice')) {
+        const value = (await background.browser.storage.local.get([select.name]))[select.name];
+        if (value && Array.from(select.options).some(option => option.value === value)) {
+            select.value = value;
+        }
+        select.addEventListener('change', () => background.browser.storage.local.set({[select.name]: select.value}));
+    }
+}
+
+/**
+ * Show the tab of the window that the address names (#settings), e.g. when the
+ * toolbar popup opens the settings
+ */
+function show_tab_from_address() {
+    const tab = location.hash.replace('#', '') || 'status';
+    const button = document.querySelector(`.tab[data-tab="${tab}"]`);
+    if (button) {
+        document.querySelectorAll('.tab').forEach(other => other.classList.toggle('on', other === button));
+        document.querySelectorAll('.tab-section').forEach(section => section.setAttribute('aria-hidden', section.id === tab ? 'false' : 'true'));
+    }
 }
 
 /**
@@ -267,7 +475,8 @@ const COMMON_FIELDS = ['id', 'timestamp', 'source', 'query', 'type', 'domain', '
 
 function get_headers(results) {
     // rows of one engine can have different fields, so use the fields of all
-    // rows: the common fields first, then the others in order of appearance
+    // rows: the common fields first, then the others in order of appearance,
+    // then the run details
     const fields = new Set();
     for (const result of results) {
         for (const field of Object.keys(result)) {
@@ -275,7 +484,8 @@ function get_headers(results) {
         }
     }
     return COMMON_FIELDS.filter(field => fields.has(field))
-        .concat([...fields].filter(field => !COMMON_FIELDS.includes(field)));
+        .concat([...fields].filter(field => !COMMON_FIELDS.includes(field) && !RUN_COLUMNS.includes(field)))
+        .concat(RUN_COLUMNS.filter(field => fields.has(field)));
 }
 /**
  * Get a CSV dump of items
@@ -424,6 +634,9 @@ function fastForward(lastRow, idProp, otherCriteria) {
 document.addEventListener('DOMContentLoaded', async function () {
     get_stats();
     setInterval(get_stats, 1000);
+    init_settings();
+    show_tab_from_address();
+    window.addEventListener('hashchange', show_tab_from_address);
 
     document.addEventListener('click', button_handler);
 });

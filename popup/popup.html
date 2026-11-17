@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<head>
+    <title>Zoekplaatje</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="fontawesome/css/all.css">
+    <style>
+        :root {
+            --neutral: #D8CBC7;
+            --accent: #3b4152;
+            --neutral-contrast-alt: #9794b4;
+            --accent-alt: #34252F;
+            --panel-background: #adb1c5;
+        }
+
+        @font-face {
+            font-family: 'Open Sans';
+            src: url("../fonts/OpenSans-Regular.ttf")
+        }
+
+        @font-face {
+            font-family: 'Open Sans';
+            font-weight: bold;
+            src: url("../fonts/OpenSans-Bold.ttf")
+        }
+
+        @font-face {
+            font-family: 'Permanent Marker';
+            src: url("../fonts/PermanentMarker-Regular.ttf")
+        }
+
+        /* also over the display of a class, e.g. the flex row of the engine switch */
+        *[aria-hidden=true] {
+            display: none !important;
+        }
+
+        body {
+            font-family: 'Open Sans', sans-serif;
+            color: var(--accent-alt);
+            background: var(--panel-background);
+            width: 22em;
+            margin: 0;
+            font-size: 14px;
+        }
+
+        header {
+            background: var(--accent);
+            color: var(--neutral);
+            padding: 0.25em 0.75em;
+            font-family: 'Permanent Marker', serif;
+            font-size: 1.4em;
+        }
+
+        main {
+            padding: 0.75em;
+        }
+
+        p {
+            margin: 0 0 0.5em 0;
+        }
+
+        .engine-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+            margin: 0 0 0.75em 0;
+        }
+
+        .engine-row .engine-name {
+            font-weight: bold;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4em;
+        }
+
+        .page {
+            border-top: 1px solid var(--accent);
+            margin-top: 0.75em;
+            padding-top: 0.75em;
+        }
+
+        /* the on/off switch of the main page (interface.html) */
+        .toggle-switch {
+            display: inline-flex;
+            align-items: center;
+            justify-content: space-around;
+            width: 55px;
+            background-color: var(--neutral-contrast-alt);
+            border-radius: 0.5em;
+            position: relative;
+            cursor: pointer;
+            border: 2px solid var(--accent);
+            /* the main page has the switch in a centered table cell; the ON label needs that */
+            text-align: center;
+        }
+
+        .toggle-switch input {
+            -moz-appearance: none;
+            opacity: 0;
+        }
+
+        .toggle-switch label {
+            width: 100%;
+        }
+
+        .toggle:before {
+            content: "";
+            height: 1.1em;
+            width: 1.1em;
+            background-color: var(--panel-background);
+            border-radius: 5px;
+            transition: all 0.2s;
+            position: absolute;
+            left: 5px;
+            top: 10%;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        .toggle:after {
+            content: "OFF";
+            font-size: .5em;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--accent);
+            position: absolute;
+            right: 10%;
+            top: 25%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .toggle-switch input:checked + .toggle:before {
+            transform: translateX(1.7em);
+            right: 10%;
+            background-color: var(--accent);
+        }
+
+        .toggle-switch input:checked + .toggle:after {
+            content: "ON";
+            left: -3em;
+        }
+
+        button {
+            background: var(--neutral-contrast-alt);
+            color: var(--accent);
+            border: 2px solid var(--accent);
+            border-radius: 0.5em;
+            padding: 0.25em 0.5em;
+            font-family: inherit;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        button:not(:disabled):hover {
+            background: var(--accent);
+            color: var(--neutral);
+            cursor: pointer;
+        }
+
+        .note {
+            font-size: 0.85em;
+            margin-top: 0.75em;
+        }
+    </style>
+</head>
+<body>
+<header>Zoekplaatje</header>
+<main>
+    <!-- only on a page of a search engine that Zoekplaatje supports -->
+    <div class="engine-row" id="engine-switch" aria-hidden="true">
+        <span>Capture results</span>
+        <div class="toggle-switch"><label for="engine-enabled"><input type="checkbox" id="engine-enabled"><span class="toggle"></span></label></div>
+        <span class="engine-name"></span>
+    </div>
+    <div class="actions">
+        <button id="open"><i class="fa fa-table"></i> Open Zoekplaatje</button>
+        <button id="settings"><i class="fa fa-cog"></i> Settings</button>
+    </div>
+    <div class="page">
+        <p id="page-status">…</p>
+        <p id="page-details" aria-hidden="true"></p>
+        <p id="screenshot-status" aria-hidden="true"></p>
+        <div class="actions">
+            <button id="screenshot" disabled><i class="fa fa-camera"></i> Screenshot now</button>
+        </div>
+        <p class="note">Screenshot by hand: Alt+Shift+Z. Automatic screenshots: see Settings.</p>
+    </div>
+</main>
+<script type="text/javascript" src="popup.js"></script>
+</body>

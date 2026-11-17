@@ -3,7 +3,7 @@
   "description": "Collect results while using search engines for later analysis",
   "manifest_version": 2,
   "name": "Zoekplaatje",
-  "version": "1.12.90",
+  "version": "1.12.91",
   "homepage_url": "https://github.com/digitalmethodsinitiative/zoekplaatje",
 
   "browser_specific_settings": {
@@ -21,13 +21,22 @@
 
   "browser_action": {
     "default_icon": "images/icon-96.png",
-    "default_title": "Zoekplaatje"
+    "default_title": "Zoekplaatje",
+    "default_popup": "popup/popup.html"
+  },
+
+  "commands": {
+    "take-screenshot": {
+      "suggested_key": {"default": "Alt+Shift+Z"},
+      "description": "Take a screenshot of the results page in this tab"
+    }
   },
 
   "permissions": [
     "webRequest", "webRequestBlocking", "webNavigation", "<all_urls>", "storage", "downloads", "activeTab", "tabs",
     "unlimitedStorage"
   ],
+  "optional_permissions": ["privacy", "management"],
 
   "incognito": "not_allowed",
 
@@ -38,6 +47,8 @@
       "inc/moment.js",
       "inc/lib.js",
       "js/background.js",
+      "js/pages.js",
+      "js/files.js",
       "modules/google.js",
       "modules/baidu.js",
       "modules/bing.js",

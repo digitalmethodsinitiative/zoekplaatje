@@ -1115,6 +1115,35 @@
         return rows;
     }
 
+    /**
+     * How the places block chose its places, for the page record: the sort
+     * and the radius (km) from the place links, and whether the distances are
+     * from the location of the user ("현재 위치에서 100m", for "near me" queries).
+     * The page does not say which location Naver used; outside Korea, it is
+     * central Seoul.
+     */
+    function place_search(doc) {
+        const block = doc.getElementById('place-app-root');
+        if (!block) {
+            return {};
+        }
+        const fields = {};
+        const link = block.querySelector('a[href*="placeSearchOption="]');
+        if (link) {
+            try {
+                const option = new URLSearchParams(new URL(link.getAttribute('href'), 'https://map.naver.com').searchParams.get('placeSearchOption') || '');
+                fields.places_sort = option.get('sortingOrder') || undefined;
+                fields.places_radius_km = option.get('radius') || undefined;
+            } catch (e) {
+                // a link that is not a URL
+            }
+        }
+        if (/현재 위치에서/.test(block.textContent)) {
+            fields.places_from_user_location = 'yes';
+        }
+        return fields;
+    }
+
     // panels that get their items from a later request: the key of the request
     const LATER_BLOCKS = {'travel-destination': 'travel', 'sports-schedule': 'sports', 'exchange-rate': 'exchange-rate'};
 
@@ -1358,6 +1387,9 @@
                 let position = 0;
                 rows.filter(row => row.block_type === 'web-results').forEach(row => row.overall_rank = ++position);
             }
+
+            // fields of the page record (see js/pages.js)
+            rows.page = Object.assign({query: page.query, results_page: page.results_page, blocks: blocks.length}, place_search(doc));
 
             // keep what later requests of a page need, for the last 50 pages
             remembered_pages.push(nav_index);

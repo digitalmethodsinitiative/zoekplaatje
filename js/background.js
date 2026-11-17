@@ -5,6 +5,14 @@ window.db.version(1).stores({
     nav: "++id, tab_id, session",
     settings: "key"
 });
+// version 2: one record for each page view with captured items (see pages.js)
+window.db.version(2).stores({
+    items: "++id, item_id, nav_index, source_platform",
+    uploads: "++id",
+    nav: "++id, tab_id, session",
+    settings: "key",
+    pages: "nav_index, source_platform"
+});
 
 window.zoekplaatje = {
     modules: {},
@@ -160,13 +168,18 @@ window.zoekplaatje = {
                 item_list = this.modules[module].callback(response, source_platform_url, source_url, nav_index);
             } catch (error) {
                 console.error(`Zoekplaatje module ${module} could not parse ${source_url}`, error);
+                this.pages.problem(module, nav_index, `could not parse ${source_url.split('?')[0]}: ${error}`);
                 continue;
             }
             if (item_list && item_list.length > 0) {
                 // one time for all items of a response, so that the rows of one
                 // page have the same timestamp in the export
                 const timestamp_collected = Date.now();
-                await Promise.all(item_list.filter(item => item).map(item => db.items.add({
+                const items = item_list.filter(item => item);
+                // a module can set fields of the page record on its list of items
+                items.page = item_list.page;
+                this.pages.record(module, nav_index, tabId, source_platform_url, items, timestamp_collected, response, source_url);
+                await Promise.all(items.map(item => db.items.add({
                     "nav_index": nav_index,
                     "item_id": item["id"],
                     "timestamp_collected": timestamp_collected,
@@ -190,7 +203,8 @@ window.zoekplaatje = {
         const tabs = await browser.tabs.query({});
         const full_url = browser.runtime.getURL('popup/interface.html');
         const tab = tabs.filter((tab) => {
-            return (tab.url === full_url);
+            // also with a section after the # (e.g. #settings)
+            return (tab.url === full_url || (tab.url || '').startsWith(full_url + '#'));
         });
         return tab[0] || false;
     },
@@ -222,11 +236,17 @@ browser.webNavigation.onCommitted.addListener((details) => {
     zoekplaatje.nav_handler(details.tabId);
 });
 
-browser.browserAction.onClicked.addListener(async () => {
+/**
+ * Show the Zoekplaatje window, in its own tab (from the toolbar popup)
+ *
+ * @param section  Tab of the window to show, e.g. 'settings' (optional)
+ */
+zoekplaatje.open_interface = async function (section) {
+    const url = browser.runtime.getURL('popup/interface.html') + (section ? '#' + section : '');
     let tab = await zoekplaatje.has_tab();
     if (!tab) {
-        browser.tabs.create({url: 'popup/interface.html'});
-    } else if (!tab.active) {
-        browser.tabs.update(tab.id, {active: true});
+        browser.tabs.create({url: url});
+    } else {
+        browser.tabs.update(tab.id, Object.assign({active: true}, section ? {url: url} : {}));
     }
-});
+};
